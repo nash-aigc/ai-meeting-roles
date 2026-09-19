@@ -1,85 +1,93 @@
 <script setup lang="ts">
 /**
- * 顶部全局控制栏（2026-08-27 精简）：
- * - AI 总开关 + 语音播放总开关：同一行，置于最左侧（用户要求保留在顶部）
- * - 角色管理按钮：靠右
- * 其余配置已下沉：角色开关/角色语音/可打断模式 → AgentFeed 各角色列头。
+ * 顶部全局控制栏：
+ * - 第一行：AI 总开关 + 语音播放总开关
+ * - 第二行：所有角色列表，每个角色带编辑按钮和开关
+ * 角色开关控制该角色是否在下方 AgentFeed 中显示，默认全部关闭。
+ * 编辑按钮打开系统设置弹窗并定位到对应角色。
  */
-import { ref } from 'vue'
 import { useMeetingStore } from '../stores/meeting'
-import RoleManagerModal from './RoleManagerModal.vue'
+import { roleColor } from '../composables/roleColor'
+import type { RoleInfo } from '../types/protocol'
 
 const store = useMeetingStore()
-const showManager = ref(false)
 
-function openManager(): void {
-  showManager.value = true
+function toggleRoleEnabled(role: RoleInfo): void {
+  store.updateConfig({ roles: [{ id: role.id, enabled: !role.enabled }] })
 }
 
-function closeManager(): void {
-  showManager.value = false
+function editRole(roleId: string): void {
+  store.openSettings(roleId)
 }
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
-    <!-- 左侧：AI 总开关 + 语音播放总开关，同一行并列（2026-08-27 用户确认保留顶部） -->
+  <div class="card flex flex-col gap-[12px] px-4 py-[12px]" style="min-height: auto;">
+    <!-- 第一行：全局开关 -->
     <div class="flex items-center gap-5">
       <label class="flex cursor-pointer items-center gap-2">
-        <span class="text-xs text-zinc-500">AI 总开关</span>
+        <span class="text-[13px] text-warm-300">AI 总开关</span>
         <button
           role="switch"
           :aria-checked="store.config.aiListen"
-          class="relative h-5.5 w-10 rounded-full transition"
-          :class="store.config.aiListen ? 'bg-emerald-600' : 'bg-zinc-700'"
+          class="switch"
+          :class="{ on: store.config.aiListen }"
           @click="store.updateConfig({ aiListen: !store.config.aiListen })"
-        >
-          <span
-            class="absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white transition-all"
-            :class="store.config.aiListen ? 'left-5' : 'left-0.5'"
-          />
-        </button>
+        />
       </label>
 
       <label class="flex cursor-pointer items-center gap-2">
-        <span class="text-xs text-zinc-500">语音播放</span>
+        <span class="text-[13px] text-warm-300">语音播放</span>
         <button
           role="switch"
           :aria-checked="store.config.ttsPlayback"
-          class="relative h-5.5 w-10 rounded-full transition"
-          :class="store.config.ttsPlayback ? 'bg-sky-600' : 'bg-zinc-700'"
+          class="switch"
+          :class="{ on: store.config.ttsPlayback }"
           @click="store.updateConfig({ ttsPlayback: !store.config.ttsPlayback })"
-        >
-          <span
-            class="absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white transition-all"
-            :class="store.config.ttsPlayback ? 'left-5' : 'left-0.5'"
-          />
-        </button>
+        />
       </label>
     </div>
 
-    <!-- 右侧：角色管理 -->
-    <button
-      class="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-      @click="openManager"
-    >
-      <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-      </svg>
-      角色管理
-    </button>
-  </div>
+    <!-- 分割线 -->
+    <div class="h-px w-full" style="background: var(--border-subtle);"></div>
 
-  <!-- 角色管理弹窗 -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition duration-150 ease-out"
-      enter-from-class="opacity-0 scale-95"
-      leave-active-class="transition duration-100 ease-in"
-      leave-to-class="opacity-0 scale-95"
-    >
-      <RoleManagerModal v-if="showManager" @close="closeManager" />
-    </Transition>
-  </Teleport>
+    <!-- 第二行：所有角色列表 -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div
+        v-for="role in store.roles"
+        :key="role.id"
+        class="flex items-center gap-2 rounded-lg px-2 py-1 transition"
+        :class="role.enabled ? 'bg-warm-selected' : ''"
+      >
+        <span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="roleColor(role.color).dot" />
+        <span
+          class="text-[13px]"
+          :class="role.enabled ? 'text-warm-100 font-medium' : 'text-warm-500'"
+        >
+          {{ role.name }}
+        </span>
+        <!-- 编辑按钮 -->
+        <button
+          class="flex h-[26px] w-[26px] items-center justify-center rounded transition hover:bg-warm-tag hover:text-warm-100"
+          :class="role.enabled ? 'text-warm-300' : 'text-warm-600'"
+          title="编辑角色"
+          @click="editRole(role.id)"
+        >
+          <svg viewBox="0 0 24 24" class="h-[13px] w-[13px]" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 20h9" stroke-linecap="round" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <!-- 角色开关 -->
+        <button
+          role="switch"
+          :aria-checked="role.enabled"
+          class="switch"
+          :class="{ on: role.enabled }"
+          :title="role.enabled ? '关闭该角色' : '开启该角色'"
+          @click="toggleRoleEnabled(role)"
+        />
+      </div>
+    </div>
+  </div>
 </template>

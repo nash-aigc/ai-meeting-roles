@@ -1,6 +1,55 @@
 @import "tailwindcss";
 
-/* ---------- 全局基调：深色录音棚 ---------- */
+/* ============================================================
+   设计令牌 — 温暖深棕主题（基于参考图提取）
+   ============================================================ */
+:root {
+  /* 背景层级（从深到浅） */
+  --bg-deepest:    #12110e;
+  --bg-sidebar:    #181612;
+  --bg-main:       #1c1915;
+  --bg-card:       #171511;
+  --bg-card-hover: #1f1c17;
+  --bg-selected:   #211e18;
+  --bg-input:      #141310;
+  --bg-tag:        #23201a;
+
+  /* 边框 */
+  --border-subtle: #26231d;
+  --border-normal: #2e2a23;
+  --border-hover:  #3d3830;
+
+  /* 文字 */
+  --text-primary:   #e6e2d8;
+  --text-secondary: #969184;
+  --text-tertiary:  #635e52;
+  --text-muted:     #4a463d;
+
+  /* 强调色 */
+  --accent:        #c9a85c;   /* 暖琥珀 */
+  --accent-soft:   rgba(201, 168, 92, 0.13);
+  --success:       #7aab7a;   /* 柔和绿 */
+  --success-soft:  rgba(122, 171, 122, 0.10);
+  --danger:        #c07a6a;   /* 柔和红 */
+  --danger-soft:   rgba(192, 122, 106, 0.10);
+  --info:          #8aa8c0;   /* 柔和蓝 */
+  --info-soft:     rgba(138, 168, 192, 0.10);
+
+  /* 圆角 */
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+
+  /* 组件统一高度 */
+  --h-btn: 34px;
+  --h-input: 34px;
+  --h-listitem: 60px;
+  --h-topbar: 52px;
+  --h-rolebar: 56px;
+}
+
+/* ---------- 全局基调 ---------- */
 html,
 body,
 #app {
@@ -8,27 +57,205 @@ body,
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+  background: var(--bg-deepest);
+  color: var(--text-primary);
   font-family:
     -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- 红色警报脉冲 ---------- */
+/* ============================================================
+   通用组件类
+   ============================================================ */
+
+/* 卡片 */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+.card-hover {
+  transition: border-color 0.15s, background 0.15s;
+}
+.card-hover:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+}
+
+/* 标签 */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--bg-tag);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.tag-success { background: var(--success-soft); color: var(--success); }
+.tag-accent  { background: var(--accent-soft); color: var(--accent); }
+.tag-danger  { background: var(--danger-soft); color: var(--danger); }
+.tag-info    { background: var(--info-soft); color: var(--info); }
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--h-btn);
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border-normal);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+.btn-primary {
+  background: var(--accent);
+  color: #1a1712;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: #d4b46a;
+  border-color: #d4b46a;
+  color: #1a1712;
+}
+.btn-ghost {
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background: var(--bg-selected);
+}
+
+/* 输入框 */
+.input {
+  width: 100%;
+  height: var(--h-input);
+  padding: 0 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus {
+  border-color: var(--accent);
+}
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+/* 开关 */
+.switch {
+  position: relative;
+  width: 38px;
+  height: 20px;
+  border-radius: 10px;
+  background: #33302a;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+}
+.switch.on {
+  background: var(--success);
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d8d4ca;
+  transition: left 0.2s;
+}
+.switch.on::after {
+  left: 20px;
+  background: #fff;
+}
+
+/* 小圆点 */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-success { background: var(--success); }
+.dot-accent  { background: var(--accent); }
+.dot-danger  { background: var(--danger); }
+.dot-muted   { background: var(--text-muted); }
+
+/* 分割线 */
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+/* 分段控制器 */
+.segmented {
+  display: flex;
+  padding: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.segmented button {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.segmented button.active {
+  background: var(--bg-selected);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ============================================================
+   动画
+   ============================================================ */
+
+/* 红色警报脉冲 */
 @keyframes alert-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55);
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(192, 122, 106, 0.55);
   }
   50% {
-    box-shadow: 0 0 0 10px rgb(239 68 68 / 0);
+    box-shadow: 0 0 0 10px rgba(192, 122, 106, 0);
   }
 }
 .alert-pulse {
   animation: alert-pulse 1.2s ease-out infinite;
 }
 
-/* ---------- 卡片入场 ---------- */
+/* 卡片入场 */
 @keyframes slide-in {
   from {
     opacity: 0;
@@ -43,14 +270,43 @@ body {
   animation: slide-in 0.25s ease-out both;
 }
 
-/* ---------- 细滚动条 ---------- */
+/* 细滚动条 */
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 *::-webkit-scrollbar-thumb {
-  @apply bg-zinc-700 rounded-full;
+  background: #33302a;
+  border-radius: 3px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ============================================================
+   语义化文字颜色（替代 zinc-*）
+   ============================================================ */
+.text-warm-100 { color: var(--text-primary); }
+.text-warm-300 { color: var(--text-secondary); }
+.text-warm-500 { color: var(--text-tertiary); }
+.text-warm-600 { color: var(--text-muted); }
+
+.bg-warm-sidebar { background: var(--bg-sidebar); }
+.bg-warm-main    { background: var(--bg-main); }
+.bg-warm-card    { background: var(--bg-card); }
+.bg-warm-input   { background: var(--bg-input); }
+.bg-warm-tag     { background: var(--bg-tag); }
+.bg-warm-selected{ background: var(--bg-selected); }
+
+.border-warm-subtle { border-color: var(--border-subtle); }
+.border-warm-normal { border-color: var(--border-normal); }
+.border-warm-hover  { border-color: var(--border-hover); }
+
+.text-accent-warm  { color: var(--accent); }
+.text-success-warm { color: var(--success); }
+.text-danger-warm  { color: var(--danger); }
+.text-info-warm    { color: var(--info); }
+
+.bg-accent-warm    { background: var(--accent); }
+.bg-success-warm   { background: var(--success); }
+.bg-danger-warm    { background: var(--danger); }

@@ -1,0 +1,30 @@
+# 构建上下文瘦身：83M → 约 1.5M
+# ⚠️ 千万不要排除 web/package-lock.json —— 阶段 1 的 `npm ci` 依赖它
+
+.git
+.gitignore
+
+# 密钥：绝不进构建上下文（运行时由 compose 的 env_file 注入进程环境）
+.env
+.env.*
+!.env.example
+docker/claude-settings.json
+docker/claude-home
+
+# 依赖与产物（镜像内会重新安装/构建）
+node_modules
+web/node_modules
+web/dist
+
+# 运行期数据
+Record
+transcripts
+*.log
+nohup.out
+
+# 杂项
+__pycache__
+*.pyc
+.DS_Store
+docs
+style-prototype.html

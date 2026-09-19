@@ -1,0 +1,49 @@
+# ai-meeting-roles —— 本机容器化运行
+#
+# 用法：
+#   bash docker/prepare-claude-config.sh   # 先生成 Claude 鉴权挂载文件（必须，否则起不来）
+#   docker compose up -d --build
+#   浏览器打开 http://127.0.0.1:8790
+#
+# 改完 .env 后必须 `docker compose up -d` 重建容器才生效
+# —— 因为 main.py 在 import 时就读取了配置（_load_dotenv + 模块级 os.getenv）。
+
+services:
+  meeting:
+    build: .
+    image: ai-meeting-roles:local
+    container_name: ai-meeting-roles
+
+    # 仅绑宿主机回环：本应用没有任何登录鉴权，谁能访问到谁就能开会并消耗你的网关额度。
+    # 确需局域网/手机访问时，改成 "8790:8790"（并自行确认网络环境可信）。
+    ports:
+      - "127.0.0.1:8790:8790"
+
+    # TTS / 火山 ASR 的密钥：直接复用项目已有的 .env，不复制内容、不烤进镜像
+    env_file:
+      - .env
+
+    environment:
+      # 容器内必须绑 0.0.0.0，否则端口映射到宿主机后访问不到（源码默认 127.0.0.1，本机直跑不变）
+      GATEWAY_HOST: "0.0.0.0"
+      # ⚠️ 刻意不设 CLAUDE_BIN：留给 agents.py 的 shutil.which("claude") 自动探测
+      #    （真实路径是 /usr/bin/claude）。写死成不存在的路径会盖掉探测结果，导致角色起不来。
+      # 隔离配置目录放到挂载卷：onboarding/信任状态跨重启保留，出问题也留在宿主机可排查
+      CLAUDE_ISOLATED_HOME: "/root/.claude-home"
+      HOME: "/root"
+
+    # 让容器能访问宿主机上的 new-api（localhost:3000）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      # 会议记录落宿主机，可在访达里直接查看
+      - ./Record:/app/Record
+      # 角色定义可编辑；应用也会在此增删角色目录
+      - ./roles:/app/roles
+      # 隔离配置目录持久化
+      - ./docker/claude-home:/root/.claude-home
+      # Claude 鉴权：宿主机生成的副本（含真实 token，已 gitignore，只读挂载）
+      - ./docker/claude-settings.json:/root/.claude/settings.json:ro
+
+    restart: unless-stopped

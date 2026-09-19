@@ -81,7 +81,7 @@ function copyAll(): void {
 
 function speakerBadgeClass(speaker: string): string {
   if (speaker === 'user') {
-    return 'bg-zinc-700 text-zinc-300'
+    return 'tag'
   }
   const role = store.roleById.get(speaker)
   if (role) {
@@ -95,22 +95,19 @@ function speakerBadgeClass(speaker: string): string {
     'bg-violet-500/20 text-violet-300',
     'bg-rose-500/20 text-rose-300',
   ]
-  // 说话人编号如 S1/S2/用户 -> 取第一个数字映射颜色
   const num = parseInt(speaker.replace(/\D/g, ''), 10)
   if (!Number.isNaN(num) && num - 1 < colors.length) {
     return colors[num - 1]
   }
-  return 'bg-zinc-700 text-zinc-300'
+  return 'tag'
 }
 
 function speakerLabel(speaker: string): string {
   if (speaker === 'user') return '用户'
   const role = store.roleById.get(speaker)
   if (role) return role.name
-  // fallback: 说话人一/说话人二
   const num = parseInt(speaker.replace(/\D/g, ''), 10)
   if (!Number.isNaN(num)) {
-    // 中文表示：说话人一、说话人二...
     const cn = ['零', '一', '二', '三', '四', '五'][num]
     return `说话人${cn}`
   }
@@ -119,26 +116,26 @@ function speakerLabel(speaker: string): string {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col rounded-xl border border-zinc-800 bg-zinc-900/60">
+  <div class="card flex min-h-0 flex-1 flex-col overflow-hidden">
     <!-- 头部 -->
-    <div class="flex items-center justify-between border-b border-zinc-800/80 px-4 py-2.5">
-      <span class="text-xs font-medium text-zinc-400">
-        实时转写<span class="ml-2 text-zinc-600">{{ store.transcripts.length }} 条 · 双击可编辑</span>
+    <div class="flex items-center justify-between border-b border-warm-subtle px-4 py-[11px]" style="min-height: 44px;">
+      <span class="text-[13px] font-medium text-warm-300">
+        实时转写<span class="ml-2 text-warm-500">{{ store.transcripts.length }} 条 · 双击可编辑</span>
       </span>
       <div class="flex items-center gap-2">
         <button
           v-if="!atBottom && store.transcripts.length"
-          class="flex items-center gap-1 rounded-md bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 transition hover:bg-zinc-700"
+          class="btn" style="height: 28px; padding: 0 10px; font-size: 12px;"
           @click="scrollToBottom"
         >
           回到底部 ↓
         </button>
         <button
           v-if="store.transcripts.length"
-          class="flex items-center gap-1 rounded-md bg-sky-600/80 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-sky-600"
+          class="btn btn-primary" style="height: 28px; padding: 0 12px; font-size: 12px;"
           @click="openFullscreen"
         >
-          <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" stroke-linecap="round" />
           </svg>
           全览
@@ -147,45 +144,45 @@ function speakerLabel(speaker: string): string {
     </div>
 
     <!-- 内容 -->
-    <div ref="containerRef" class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2.5" @scroll="onScroll">
-      <div v-if="!store.transcripts.length" class="flex h-full items-center justify-center text-xs text-zinc-600">
+    <div ref="containerRef" class="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-[12px]" @scroll="onScroll">
+      <div v-if="!store.transcripts.length" class="flex h-full items-center justify-center text-[13px] text-warm-600">
         开始录音后，转写内容将实时显示在这里
       </div>
 
       <div v-for="item in store.transcripts" :key="item.id" class="slide-in group">
         <!-- 编辑态 -->
-        <div v-if="editingId === item.id" class="rounded-lg border border-sky-500/40 bg-sky-500/5 p-2">
+        <div v-if="editingId === item.id" class="rounded-lg border border-info-warm/40 p-2" style="background: var(--info-soft);">
           <textarea
             v-model="editText"
-            class="w-full resize-none bg-transparent text-xs leading-4 text-zinc-100 outline-none"
+            class="w-full resize-none bg-transparent text-[13px] leading-5 text-warm-100 outline-none"
             rows="3"
             @keydown.enter.prevent="commitEdit"
             @keydown.esc="editingId = null"
           />
-          <div class="mt-1 flex justify-end gap-2 text-[11px]">
-            <button class="text-zinc-500 hover:text-zinc-300" @click="editingId = null">取消</button>
-            <button class="text-sky-400 hover:text-sky-300" @click="commitEdit">保存 (Enter)</button>
+          <div class="mt-1 flex justify-end gap-2 text-[12px]">
+            <button class="text-warm-500 hover:text-warm-300" @click="editingId = null">取消</button>
+            <button class="text-info-warm hover:brightness-110" @click="commitEdit">保存 (Enter)</button>
           </div>
         </div>
 
         <!-- 展示态 -->
         <div
           v-else
-          class="flex flex-wrap gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1.5 transition hover:bg-zinc-800/40"
+          class="flex flex-wrap gap-x-2 gap-y-1 rounded-lg px-2 py-[10px] transition hover:bg-warm-selected"
           :class="{ 'opacity-80': item.edited }"
           @dblclick="startEdit(item.id, item.text)"
         >
-          <span class="shrink-0 pt-0.5 font-mono text-[10px] tabular-nums text-zinc-600">
+          <span class="shrink-0 pt-0.5 font-mono text-[11px] tabular-nums text-warm-600">
             {{ msToStamp(item.tsMs) }}
           </span>
           <span
-            class="shrink-0 self-start rounded px-1.5 py-0.5 text-[10px] leading-4"
+            class="shrink-0 self-start tag"
             :class="speakerBadgeClass(item.speaker)"
           >
             {{ speakerLabel(item.speaker) }}
           </span>
-          <p class="flex-1 min-w-[60%] text-xs leading-4 text-zinc-200">{{ item.text }}</p>
-          <span v-if="item.edited" class="ml-auto shrink-0 self-start rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
+          <p class="flex-1 min-w-[60%] text-[13px] leading-5 text-warm-100">{{ item.text }}</p>
+          <span v-if="item.edited" class="ml-auto shrink-0 self-start tag">
             已修正
           </span>
         </div>
@@ -205,24 +202,18 @@ function speakerLabel(speaker: string): string {
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
           @click.self="fullscreenDialog = false"
         >
-          <div class="flex max-h-[90vh] w-[85vw] max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl">
-            <div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-              <h3 class="text-sm font-semibold text-zinc-100">转写全览</h3>
+          <div class="flex max-h-[90vh] w-[85vw] max-w-[1000px] flex-col overflow-hidden rounded-2xl border border-warm-normal bg-warm-card shadow-2xl">
+            <div class="flex items-center justify-between border-b border-warm-subtle px-4 py-[14px]">
+              <h3 class="text-[15px] font-semibold text-warm-100">转写全览</h3>
               <div class="flex items-center gap-2">
-                <button
-                  class="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700"
-                  @click="copyAll"
-                >
+                <button class="btn" style="height: 30px; font-size: 12px;" @click="copyAll">
                   复制全部
                 </button>
-                <button
-                  class="rounded-lg bg-emerald-600/80 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-600"
-                  @click="downloadFulltext"
-                >
+                <button class="btn btn-primary" style="height: 30px; font-size: 12px;" @click="downloadFulltext">
                   下载文件
                 </button>
                 <button
-                  class="rounded-lg p-1.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
+                  class="btn btn-ghost" style="height: 30px; width: 30px; padding: 0;"
                   @click="fullscreenDialog = false"
                 >
                   <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2">
@@ -234,7 +225,7 @@ function speakerLabel(speaker: string): string {
             <div class="min-h-0 flex-1 overflow-y-auto">
               <textarea
                 v-model="fullText"
-                class="w-full h-full resize-none bg-zinc-950 px-4 py-3 text-xs leading-4 text-zinc-200 outline-none"
+                class="w-full h-full resize-none bg-warm-input px-4 py-3 text-[13px] leading-5 text-warm-100 outline-none"
                 rows="25"
               />
             </div>

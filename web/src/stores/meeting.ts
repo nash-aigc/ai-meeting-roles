@@ -86,6 +86,9 @@ export const useMeetingStore = defineStore('meeting', () => {
   // AI 生成内容（右栏数据源）
   const agentEvents = ref<AgentEventCard[]>([])
   const roles = ref<RoleInfo[]>(DEFAULT_ROLES)
+  const rolesInitialized = ref(false) // 首次收到 roles.list 时根据 defaultEnabled 初始化 enabled
+  // 角色运行状态（时间线显示）：roleId -> { state, detail }
+  const roleStates = ref<Record<string, { state: string; detail: string }>>({})
   const config = ref<MeetingConfig>({
     interruptMode: 'noInterrupt',
     aiListen: true,
@@ -354,6 +357,7 @@ export const useMeetingStore = defineStore('meeting', () => {
       roles?: {
         id: string
         enabled?: boolean
+        defaultEnabled?: boolean // 是否默认启动
         thinkIntervalSec?: number
         ttsEnabled?: boolean
         priority?: number
@@ -368,6 +372,7 @@ export const useMeetingStore = defineStore('meeting', () => {
         const role = roles.value.find((r) => r.id === pr.id)
         if (!role) continue
         if (typeof pr.enabled === 'boolean') role.enabled = pr.enabled
+        if (typeof pr.defaultEnabled === 'boolean') role.defaultEnabled = pr.defaultEnabled
         if (typeof pr.thinkIntervalSec === 'number') role.thinkIntervalSec = pr.thinkIntervalSec
         if (typeof pr.ttsEnabled === 'boolean') role.ttsEnabled = pr.ttsEnabled
         if (typeof pr.priority === 'number') role.priority = pr.priority
@@ -429,7 +434,16 @@ export const useMeetingStore = defineStore('meeting', () => {
   function handleServerMessage(m: ServerMessage): void {
     switch (m.type) {
       case 'roles.list':
-        roles.value = m.roles
+        // 首次加载时根据 defaultEnabled 初始化 enabled
+        if (!rolesInitialized.value) {
+          roles.value = m.roles.map((r) => ({
+            ...r,
+            enabled: r.defaultEnabled ?? r.enabled ?? false,
+          }))
+          rolesInitialized.value = true
+        } else {
+          roles.value = m.roles
+        }
         break
       case 'role.prompt':
         rolePromptCache.value = { ...rolePromptCache.value, [m.id]: m.prompt }
@@ -523,6 +537,10 @@ export const useMeetingStore = defineStore('meeting', () => {
             ttsSpeaker.speakInterrupt(m.text, role.voice)
           }
         }
+        break
+      case 'agent.state':
+        // 角色运行状态更新（时间线显示）
+        roleStates.value[m.role] = { state: m.state, detail: m.detail }
         break
       case 'tts.start':
         playbackWindows.value.push({
@@ -681,6 +699,19 @@ export const useMeetingStore = defineStore('meeting', () => {
     }
   }
 
+  // ---------- 系统设置弹窗控制 ----------
+  const settingsOpen = ref(false)
+  const settingsInitialRoleId = ref<string | null>(null)
+
+  function openSettings(roleId?: string): void {
+    settingsInitialRoleId.value = roleId ?? null
+    settingsOpen.value = true
+  }
+  function closeSettings(): void {
+    settingsOpen.value = false
+    settingsInitialRoleId.value = null
+  }
+
   // ---------- 工具 ----------
   function msToClock(ms: number): string {
     const s = Math.floor(ms / 1000)
@@ -707,9 +738,14 @@ export const useMeetingStore = defineStore('meeting', () => {
     connLog,
     asrEngine,
     setAsrEngine,
+    settingsOpen,
+    settingsInitialRoleId,
+    openSettings,
+    closeSettings,
     ttsError,
     agentEvents,
     roles,
+    roleStates,
     config,
     activeInterrupt,
     playbackWindows,

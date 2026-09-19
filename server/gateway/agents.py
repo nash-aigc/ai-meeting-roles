@@ -22,12 +22,15 @@ from typing import Dict, Optional, List
 
 log = logging.getLogger("agents")
 
-CLAUDE_BIN = "/Users/mjm/.local/bin/claude"
+# CLI 路径：环境变量优先 → PATH 搜索 → 容器内默认位置。
+# （原先硬编码 "/Users/mjm/.local/bin/claude"：换机/容器必挂，本机该路径也早已不存在）
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN") or shutil.which("claude") or "/usr/local/bin/claude"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Meeting/
 ROLES_DIR = os.path.join(BASE_DIR, "roles")
 
 # 隔离配置目录：避免加载用户全部 hooks/MCP（启动慢+噪音），但必须写入鉴权 env
-CLAUDE_ISOLATED_HOME = "/tmp/meeting-claude-home"
+# 可用 CLAUDE_ISOLATED_HOME 覆盖（容器内指向挂载卷，使 onboarding 态跨重启保留）
+CLAUDE_ISOLATED_HOME = os.environ.get("CLAUDE_ISOLATED_HOME", "/tmp/meeting-claude-home")
 
 def _ensure_isolated_claude_home() -> None:
     """写最小 settings.json 到隔离目录：仅保留鉴权 env（AUTH_TOKEN/BASE_URL/模型映射），
@@ -42,6 +45,12 @@ def _ensure_isolated_claude_home() -> None:
         user_env = {}
     env = {k: v for k, v in user_env.items()
            if k not in ("ANTHROPIC_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL")}
+    # 显式设置模型为 NewAPI 支持的小写名称，避免大写/ANSI污染导致 unrecognized_model
+    env["ANTHROPIC_MODEL"] = "deepseek-v4-flash"
+    env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "deepseek-v4-flash"
+    env["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"] = "deepseek-v4-flash"
+    env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "deepseek-v4-flash"
+    env["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"] = "deepseek-v4-flash"
     payload = {"env": env, "includeCoAuthoredBy": False}
     try:
         with open(settings_path, "w", encoding="utf-8") as f:
@@ -252,6 +261,14 @@ def get_builtin_presets() -> List[Dict]:
 class RoleAgent:
     """单个角色的长驻 Claude 进程。"""
 
+    # 状态枚举（用于前端时间线显示）
+    STATE_STARTING = "starting"          # 进程启动中
+    STATE_SESSION_CREATED = "session"    # 会话ID已创建
+    STATE_READY = "ready"                # CLI就绪，模型已加载
+    STATE_TRANSCRIPT_SENT = "sent"       # 转写已发送
+    STATE_RESPONSE_RECEIVED = "receiving" # 正在接收回复
+    STATE_RESPONSE_DONE = "done"         # 回复生成完成
+
     def __init__(self, role_id: str, on_event, loop=None) -> None:
         self.role_id = role_id
         self.name = ROLE_DEFS[role_id]["name"]
@@ -271,8 +288,24 @@ class RoleAgent:
         self.interrupt_enabled = False  # 该角色「可打断」开关（2026-08-27 起按角色独立，默认不打扰）
         self.priority = int(ROLE_DEFS[role_id].get("priority", 50))  # 发言优先级：小者先说（1 最高）
         self.last_flush_at = time.monotonic()
+        # 运行状态（用于前端时间线）
+        self.state = self.STATE_STARTING
+        self.state_detail = ""  # 状态详情，如模型名、错误信息
 
     # ---------- 生命周期 ----------
+
+    def set_state(self, state: str, detail: str = "") -> None:
+        """更新角色运行状态，并通过 on_event 通知前端（state 类型）。"""
+        self.state = state
+        self.state_detail = detail
+        try:
+            if self.loop and self.loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self.on_event(self.role_id, "STATE", json.dumps({"state": state, "detail": detail})),
+                    self.loop
+                )
+        except Exception as e:  # noqa: BLE001
+            log.debug("agent[%s] state notify failed: %s", self.role_id, e)
 
     async def start(self) -> None:
         # 继承宿主(gateway)环境 + 隔离 CLAUDE_CONFIG_DIR（避免加载用户全部 hooks/MCP）。
@@ -282,6 +315,7 @@ class RoleAgent:
         for k in ("ANTHROPIC_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"):
             env.pop(k, None)
         env["CLAUDE_CONFIG_DIR"] = CLAUDE_ISOLATED_HOME
+        self.set_state(self.STATE_STARTING, "正在启动 Claude 进程...")
         self.proc = subprocess.Popen(
             [
                 CLAUDE_BIN, "-p",
@@ -302,6 +336,7 @@ class RoleAgent:
         )
         self._alive = True
         self._pending_text = ""
+        self.set_state(self.STATE_SESSION_CREATED, f"会话ID: {self.session_id[:8]}...")
         self._reader_task = asyncio.get_event_loop().run_in_executor(None, self._read_loop)
         log.info("agent[%s] started session=%s", self.role_id, self.session_id[:8])
 
@@ -339,6 +374,7 @@ class RoleAgent:
         self.buffer.clear()
         self._buf_chars = 0
         self._inject(f"[销售发言增量] {text}")
+        self.set_state(self.STATE_TRANSCRIPT_SENT, f"已发送 {len(text)} 字转写")
 
     def _inject(self, text: str) -> None:
         if not self.proc or not self.proc.stdin:
@@ -372,16 +408,27 @@ class RoleAgent:
                     continue
                 ev_type = ev.get("type")
 
-                # init 事件携带实际模型名（供前端显示）
+                # init 事件（CLI 2.x 可能不带 model 字段）
                 if ev_type == "system" and ev.get("subtype") == "init":
-                    self.model_name = str(ev.get("model") or "")
-                    if self.model_name:
-                        log.info("agent[%s] model=%s", self.role_id, self.model_name)
+                    if not self.model_name:
+                        self.set_state(self.STATE_READY, "Claude CLI 就绪")
+                    log.info("agent[%s] init received", self.role_id)
 
                 if ev_type == "stream_event":
                     # --include-partial-messages 的增量帧：从 content_block_delta 实时提取文本，
                     # 按行结算（角色协议为逐行 OBSERVE:/INTERRUPT:）
                     ue = ev.get("event") or {}
+                    # message_start 事件携带实际模型名
+                    if ue.get("type") == "message_start":
+                        msg = ue.get("message") or {}
+                        model = str(msg.get("model") or "")
+                        if model and model != self.model_name:
+                            self.model_name = model
+                            log.info("agent[%s] model=%s", self.role_id, self.model_name)
+                            self.set_state(self.STATE_READY, f"模型就绪: {model}")
+                    # message_stop 表示本轮回复完成
+                    if ue.get("type") == "message_stop":
+                        self.set_state(self.STATE_RESPONSE_DONE, "回复生成完成")
                     if ue.get("type") == "content_block_delta":
                         delta = (ue.get("delta") or {}).get("text", "")
                         if delta:
@@ -407,7 +454,11 @@ class RoleAgent:
         # 网关错误（429 等）会以 assistant 文本形式出现，不能当角色发言
         if text.startswith("API Error"):
             log.warning("agent[%s] gateway error: %s", self.role_id, text[:120])
+            self.set_state("error", text[:100])
             return
+        # 收到回复文本，更新状态
+        if self.state not in (self.STATE_RESPONSE_RECEIVED, self.STATE_RESPONSE_DONE):
+            self.set_state(self.STATE_RESPONSE_RECEIVED, "正在生成回复...")
         for ln in text.splitlines():
             ln = ln.strip()
             if not ln:

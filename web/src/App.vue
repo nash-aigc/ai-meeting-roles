@@ -22,7 +22,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen flex-col overflow-hidden">
+  <div class="flex h-screen flex-col overflow-hidden bg-warm-main">
     <TopBar />
 
     <main class="flex min-h-0 flex-1">
@@ -30,7 +30,7 @@ onMounted(() => {
       <RecorderPanel />
 
       <!-- 右侧：AI 角色内容或历史视图 -->
-      <section v-if="store.view === 'live'" class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
+      <section v-if="store.view === 'live'" class="flex min-h-0 min-w-0 flex-1 flex-col gap-[10px] p-[14px]">
         <!-- 角色栏：全局控制 + 角色横向排列 -->
         <RoleBar />
 

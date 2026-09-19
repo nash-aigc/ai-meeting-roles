@@ -228,6 +228,69 @@ async def config_asr() -> JSONResponse:
     })
 
 
+@app.get("/api/asr/test-audio")
+async def asr_test_audio() -> JSONResponse:
+    """生成一段测试语音（16kHz 16-bit PCM WAV），供前端 ASR 配置测试使用。
+    使用 macOS `say` 命令合成「你好，这是一段语音识别配置测试」，转换为 16kHz WAV 后 base64 返回。
+    TTS 不可用时的通用备选方案。"""
+    import subprocess
+    import tempfile
+    import base64
+
+    test_text = "你好，这是一段语音识别配置测试"
+
+    # `say` 是 macOS 专有命令；Linux 容器内直接返回明确原因（原实现会落到 500 + 晦涩的 stderr）
+    if not shutil.which("say"):
+        return JSONResponse(
+            {"ok": False, "error": "say 仅 macOS 可用；容器内请改用 /api/tts，或直接录音测试 ASR"},
+            status_code=501,
+        )
+
+    try:
+        # 1. 使用 macOS say 命令生成 AIFF
+        with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f_aiff:
+            aiff_path = f_aiff.name
+        result = subprocess.run(
+            ["say", "-o", aiff_path, test_text],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            return JSONResponse({"ok": False, "error": f"say 命令失败: {result.stderr[:200]}"}, status_code=500)
+
+        # 2. 用 ffmpeg 转 16kHz 单声道 16-bit WAV
+        wav_path = aiff_path + ".wav"
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", aiff_path, "-ar", "16000", "-ac", "1",
+             "-sample_fmt", "s16", wav_path],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            return JSONResponse({"ok": False, "error": f"ffmpeg 转换失败: {result.stderr[:200]}"}, status_code=500)
+
+        # 3. 读取 WAV（跳过 44 字节头，取 PCM 数据）
+        with open(wav_path, "rb") as f:
+            wav_data = f.read()
+        pcm_data = wav_data[44:] if len(wav_data) > 44 else wav_data
+
+        # 4. 清理临时文件
+        try:
+            os.unlink(aiff_path)
+            os.unlink(wav_path)
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "ok": True,
+            "text": test_text,
+            "sampleRate": 16000,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBase64": base64.b64encode(pcm_data).decode("ascii"),
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"生成测试音频失败: {str(e)[:200]}"}, status_code=500)
+
+
 def _tts_synth(text: str, voice_name: str) -> bytes:
     """同步合成（在线程池里跑）：返回 mp3 字节。失败抛异常。"""
     import dashscope
@@ -387,6 +450,19 @@ from agents import create_role_directory, delete_role_directory, update_role_pro
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # Meeting/
 
+# 模块级共享角色配置（跨 WebSocket 连接保持，避免刷新页面后配置重置）
+ROLE_CFG: dict[str, dict] = {
+    rid: {
+        "enabled": False,
+        "defaultEnabled": False,
+        "thinkIntervalSec": int(ROLE_DEFS[rid].get("default_think_interval_sec", 10)),
+        "ttsEnabled": bool(ROLE_DEFS[rid].get("default_tts_enabled", False)),
+        "priority": int(ROLE_DEFS[rid].get("priority", 50)),
+        "interruptEnabled": False,
+    }
+    for rid in ROLE_DEFS
+}
+
 
 def _safe_filename(name: str, max_len: int = 48) -> str:
     """把标题/摘要变成可落盘的文件名（不含扩展名）。"""
@@ -468,17 +544,7 @@ async def ws_meeting(ws: WebSocket) -> None:
     push_interval = 5  # 轮询步长（每角色真正的“思考间隔”由 role.thinkIntervalSec 控制）
     meeting_id = ""
     ai_listen = True
-    role_cfg = {
-        rid: {
-            "enabled": True,
-            "thinkIntervalSec": int(ROLE_DEFS[rid].get("default_think_interval_sec", 10)),
-            "ttsEnabled": bool(ROLE_DEFS[rid].get("default_tts_enabled", False)),
-            "priority": int(ROLE_DEFS[rid].get("priority", 50)),
-            # 2026-08-27：打断开关改为每角色独立（角色列头上的「可打断/不打扰」），默认不打扰
-            "interruptEnabled": False,
-        }
-        for rid in ROLE_DEFS
-    }
+    role_cfg = ROLE_CFG  # 引用模块级共享配置，跨连接保持
     transcripts: list[dict] = []  # {tsMs, speaker:'user', text}
     agent_events: list[dict] = []  # {tsMs, role, type, text, executed?}
 
@@ -499,7 +565,7 @@ async def ws_meeting(ws: WebSocket) -> None:
 
     async def send_roles() -> None:
         roles_data = []
-        for rid in ROLE_DEFS:
+        for rid in role_cfg.keys():
             # 尝试从预定义meta拿，否则默认值
             if rid in _default_role_meta:
                 voice, color, priority, agg, desc = _default_role_meta[rid]
@@ -508,17 +574,19 @@ async def ws_meeting(ws: WebSocket) -> None:
                 color = "sky" if "customer" in rid else "amber"
                 priority = 2
                 agg = "medium"
-                desc = ROLE_DEFS[rid]["name"]
+                desc = ROLE_DEFS.get(rid, {}).get("name", rid)
+            role_name = ROLE_DEFS.get(rid, {}).get("name", rid)
             roles_data.append({
                 "id": rid,
-                "name": ROLE_DEFS[rid]["name"],
+                "name": role_name,
                 "voice": voice,
                 "color": color,
                 "enabled": bool(role_cfg[rid]["enabled"]),
+                "defaultEnabled": bool(role_cfg[rid].get("defaultEnabled", False)),
                 "thinkIntervalSec": int(role_cfg[rid]["thinkIntervalSec"]),
                 "ttsEnabled": bool(role_cfg[rid]["ttsEnabled"]),
                 "interruptEnabled": bool(role_cfg[rid].get("interruptEnabled", False)),
-                "promptPreview": prompt_preview(rid),
+                "promptPreview": prompt_preview(rid) if rid in ROLE_DEFS else "",
                 # 发言优先级：用户可在角色管理页调整（1 最高，同轮到期小者先说）
                 "priority": int(role_cfg[rid].get("priority", priority)),
                 "interruptAggressiveness": agg,
@@ -532,6 +600,19 @@ async def ws_meeting(ws: WebSocket) -> None:
     async def on_agent_event(role_id: str, kind: str, text: str) -> None:
         """角色输出 -> 前端事件 + 广播给其他角色（角色间信息互通：每个角色的会话里
         都能看到其他角色的发言，用户在任意角色的 Claude 会话 resume 都有完整信息）。"""
+        # STATE 类型：角色运行状态更新（时间线显示），不存入事件列表
+        if kind == "STATE":
+            try:
+                state_data = json.loads(text)
+                await send({
+                    "type": "agent.state",
+                    "role": role_id,
+                    "state": state_data.get("state", ""),
+                    "detail": state_data.get("detail", ""),
+                })
+            except Exception:
+                pass
+            return
         import time as _t
         ts = int(_t.time() * 1000) - started_at
         # 跨角色同步：把该角色的发言注入其他所有角色上下文（observe 不广播，避免噪音回环）
@@ -719,6 +800,11 @@ async def ws_meeting(ws: WebSocket) -> None:
                             continue
                         if rp.get("enabled") is not None:
                             role_cfg[rid]["enabled"] = bool(rp.get("enabled"))
+                        if rp.get("defaultEnabled") is not None:
+                            role_cfg[rid]["defaultEnabled"] = bool(rp.get("defaultEnabled"))
+                            # 开启默认启动时，同时立即启用该角色
+                            if role_cfg[rid]["defaultEnabled"]:
+                                role_cfg[rid]["enabled"] = True
                         if rp.get("thinkIntervalSec") is not None:
                             try:
                                 role_cfg[rid]["thinkIntervalSec"] = max(2, min(60, int(rp.get("thinkIntervalSec"))))
@@ -747,17 +833,25 @@ async def ws_meeting(ws: WebSocket) -> None:
             elif t == "role.create":
                 role_data = m.get("role", {})
                 rid = str(role_data.get("id", "")).strip()
+                logging.info(f"role.create received: rid={rid}, in ROLE_DEFS={rid in ROLE_DEFS}, in role_cfg={rid in role_cfg}")
                 if rid and rid not in ROLE_DEFS:
                     name = str(role_data.get("name", rid))
                     prompt = str(role_data.get("prompt", ""))
                     if prompt and create_role_directory(rid, name, prompt):
-                        # 初始化配置
                         role_cfg[rid] = {
-                            "enabled": True,
+                            "enabled": False,
+                            "defaultEnabled": False,
                             "thinkIntervalSec": int(role_data.get("thinkIntervalSec", 60)),
                             "ttsEnabled": bool(role_data.get("ttsEnabled", False)),
+                            "priority": int(role_data.get("priority", 50)),
+                            "interruptEnabled": False,
                         }
-                        await send_roles()
+                        logging.info(f"role created: {rid}, role_cfg keys={list(role_cfg.keys())}, ROLE_DEFS keys={list(ROLE_DEFS.keys())}")
+                        try:
+                            await send_roles()
+                            logging.info(f"send_roles succeeded after create")
+                        except Exception as e:
+                            logging.error(f"send_roles failed: {e}", exc_info=True)
                         await send({"type": "error", "detail": f"角色 {name} 创建成功"})
                     else:
                         await send({"type": "error", "detail": "创建失败，检查角色ID是否已存在"})
@@ -840,8 +934,8 @@ async def ws_meeting(ws: WebSocket) -> None:
 
 
 # ---------- 生产模式静态托管前端 dist ----------
-DIST_DIR = "/Users/mjm/Documents/SuperClaw/Agents/Meeting/web/dist"
-if __import__("os").path.isdir(DIST_DIR):
+DIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "web", "dist")
+if os.path.isdir(DIST_DIR):
 
     @app.get("/")
     async def index() -> FileResponse:
@@ -853,7 +947,11 @@ if __import__("os").path.isdir(DIST_DIR):
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8787, log_level="info")
+    port = int(os.getenv("GATEWAY_PORT", "8790"))
+    # 绑定地址：本机直跑默认只绑回环（本应用无鉴权，回环最安全）；
+    # 容器内必须由 compose 传 GATEWAY_HOST=0.0.0.0，否则端口映射不可达。
+    host = os.getenv("GATEWAY_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

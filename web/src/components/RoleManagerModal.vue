@@ -1,15 +1,9 @@
 <script setup lang="ts">
 /**
  * 角色管理弹窗：
- * - 左侧：角色列表 + 添加按钮 + 行业标签筛选（筛选项 2026-08-27 字体放大 15%）
- * - 右侧：顶部操作区（删除/保存，2026-08-27 从底部上移）+ 详情区（左=参数单列，右=提示词）
+ * - 左侧：角色列表 + 添加按钮 + 行业标签筛选
+ * - 右侧：顶部操作区（删除/保存）+ 详情区（左=参数单列，右=提示词）
  * - 底部：内置预设按行业分类展示，可一键添加
- *
- * 2026-08-27 优化：
- * - 删除角色二次确认（两道弹窗，防误删）
- * - 保存修改成功反馈：按钮切换为带对勾的成功态动画，2s 后自动恢复
- * - 音色支持「试听」（WebAudio 增益播放；王新月响度补偿见 services/tts.ts）
- * - 详情排版：角色参数单列窄栏在左、提示词在右，更紧凑
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useMeetingStore } from '../stores/meeting'
@@ -18,6 +12,7 @@ import type { RoleInfo, RolePresetGroup, RolePreset } from '../types/protocol'
 
 const props = defineProps<{
   onClose: () => void
+  initialRoleId?: string | null
 }>()
 
 const store = useMeetingStore()
@@ -45,7 +40,7 @@ const availableColors = [
   { key: 'violet', name: '紫罗兰', label: 'violet' },
 ]
 
-// 完整提示词异步到达时填充编辑框（selectRole 先用预览占位）
+// 完整提示词异步到达时填充编辑框
 watch(
   () => store.rolePromptCache,
   (cache) => {
@@ -90,9 +85,7 @@ function handleImport(file: File): void {
     try {
       const data = JSON.parse(e.target?.result as string)
       if (Array.isArray(data.roles)) {
-        // 提示确认
         if (confirm(`导入 ${data.roles.length} 个角色？会覆盖同名角色。`)) {
-          // 逐个创建
           data.roles.forEach((role: any) => {
             store.createRole({
               id: role.id,
@@ -140,7 +133,6 @@ function selectRole(role: RoleInfo): void {
     ttsEnabled: role.ttsEnabled,
     priority: role.priority ?? 50,
     industryTag: role.industryTag || '',
-    // 先用缓存/预览占位，随后向 gateway 请求完整提示词（role.prompt 响应更新缓存）
     prompt: store.rolePromptCache[role.id] || role.promptPreview || '',
   }
   store.getRolePrompt(role.id)
@@ -189,7 +181,7 @@ function submitCreate(): void {
   }
 }
 
-// ---- 保存反馈（2026-08-27）：saving -> ok(对勾+成功色动画) / error，2s 后回落 ----
+// ---- 保存反馈 ----
 type SaveState = 'idle' | 'saving' | 'ok' | 'error'
 const saveState = ref<SaveState>('idle')
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -199,7 +191,6 @@ async function submitUpdate(): Promise<void> {
   saveState.value = 'saving'
   try {
     store.updateRolePrompt(selectedRoleId.value, form.value.prompt)
-    // also update config for thinkInterval and ttsEnabled
     store.updateConfig({
       roles: [{
         id: selectedRoleId.value,
@@ -217,7 +208,7 @@ async function submitUpdate(): Promise<void> {
   }
 }
 
-// ---- 删除二次确认（2026-08-27 用户要求）：两道弹窗，第二道明示不可恢复 ----
+// ---- 删除二次确认 ----
 function deleteCurrent(): void {
   if (!selectedRoleId.value) return
   const id = selectedRoleId.value
@@ -227,7 +218,7 @@ function deleteCurrent(): void {
   selectedRoleId.value = null
 }
 
-// ---- 音色试听（2026-08-27）：走 speakWithGain，与正式播放同一增益口径，便于对比响度 ----
+// ---- 音色试听 ----
 const previewing = ref(false)
 
 async function testVoice(): Promise<void> {
@@ -266,22 +257,28 @@ function addPreset(preset: RolePreset): void {
 
 onMounted(() => {
   store.requestRolePresets()
+  // 如果传入了初始角色ID，自动选中并定位
+  if (props.initialRoleId) {
+    const role = store.roles.find(r => r.id === props.initialRoleId)
+    if (role) {
+      selectRole(role)
+    }
+  }
 })
 
 onUnmounted(() => {
-  // 弹窗关闭时停掉试听语音（录音进行中不打断会议语音队列，让试听自然播完）
   if (previewing.value && store.state !== 'recording') stopVoicePlayback()
 })
 </script>
 
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-    <div class="flex h-[85vh] w-[90vw] max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900 shadow-2xl">
+    <div class="flex h-[85vh] w-[90vw] max-w-[1200px] flex-col overflow-hidden rounded-2xl border border-warm-normal bg-warm-card shadow-2xl">
       <!-- 头部 -->
-      <div class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <h3 class="text-sm font-semibold text-zinc-100">AI 角色管理</h3>
+      <div class="flex items-center justify-between border-b border-warm-subtle px-4 py-[14px]">
+        <h3 class="text-[15px] font-semibold text-warm-100">AI 角色管理</h3>
         <button
-          class="rounded-lg p-1 text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-300"
+          class="btn btn-ghost" style="height: 30px; width: 30px; padding: 0;"
           @click="props.onClose"
         >
           <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2">
@@ -293,12 +290,13 @@ onUnmounted(() => {
       <!-- 主体：左侧列表 + 右侧编辑 -->
       <div class="flex min-h-0 flex-1">
         <!-- 左侧：角色列表 + 筛选 -->
-        <div class="flex w-64 min-w-0 flex-col border-r border-zinc-800 p-3">
-          <!-- 筛选（2026-08-27 常用项字体放大 15%：text-xs -> text-[13.8px]） -->
-          <div class="mb-2 flex flex-wrap gap-1.5">
+        <div class="flex w-[260px] min-w-0 flex-col border-r-2 border-warm-normal p-[14px]">
+          <!-- 筛选 -->
+          <div class="mb-[12px] flex flex-wrap gap-2">
             <button
-              class="rounded-full px-3 py-1 text-[13.8px] transition"
-              :class="!searchIndustry ? 'bg-sky-500/20 text-sky-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'"
+              class="tag transition hover:border-warm-hover"
+              :class="!searchIndustry ? 'tag-info' : ''"
+              style="cursor: pointer; padding: 6px 16px; font-size: 13px;"
               @click="searchIndustry = null"
             >
               全部
@@ -306,55 +304,59 @@ onUnmounted(() => {
             <button
               v-for="tag in ['销售', '管理', '产品']"
               :key="tag"
-              class="rounded-full px-3 py-1 text-[13.8px] transition"
-              :class="searchIndustry === tag ? 'bg-sky-500/20 text-sky-300' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'"
+              class="tag transition hover:border-warm-hover"
+              :class="searchIndustry === tag ? 'tag-info' : ''"
+              style="cursor: pointer; padding: 6px 16px; font-size: 13px;"
               @click="searchIndustry = searchIndustry === tag ? null : tag"
             >
               {{ tag }}
             </button>
           </div>
 
+          <!-- 粗分割线 -->
+          <div class="mb-[12px] h-[2px] w-full rounded-full" style="background: var(--border-normal);"></div>
+
           <!-- 角色列表 -->
           <div class="flex-1 space-y-1 overflow-y-auto">
             <button
               v-for="role in filteredRoles"
               :key="role.id"
-              class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition"
-              :class="selectedRoleId === role.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/50'"
+              class="flex w-full items-center gap-2 rounded-lg px-3 py-[10px] text-left text-[13px] transition"
+              :class="selectedRoleId === role.id ? 'bg-warm-selected text-warm-100' : 'text-warm-300 hover:bg-warm-selected'"
               @click="selectRole(role)"
             >
-              <span class="h-2 w-2 rounded-full" :class="role.color + '-400 bg-'"></span>
+              <span class="h-2.5 w-2.5 rounded-full" :class="role.color + '-400 bg-'"></span>
               <span class="min-w-0 truncate">{{ role.name }}</span>
-              <span v-if="!role.enabled" class="ml-auto text-[10px] text-zinc-600">已关闭</span>
+              <span v-if="!role.enabled" class="ml-auto text-[11px] text-warm-600">已关闭</span>
             </button>
           </div>
 
           <!-- 新建 + 导入/导出 -->
-          <div class="mt-3 space-y-2">
+          <div class="mt-[14px] space-y-2">
             <button
-              class="flex w-full items-center justify-center gap-1 rounded-lg bg-emerald-600/80 px-3 py-2 text-xs font-medium text-white transition hover:bg-emerald-600"
+              class="btn btn-primary w-full"
               @click="createNew"
             >
-              <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
+              <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14M5 12h14" stroke-linecap="round" />
               </svg>
               新建角色
             </button>
             <div class="grid grid-cols-2 gap-2">
               <button
-                class="flex items-center justify-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-500"
+                class="btn" style="font-size: 12px;"
                 @click="exportAllRoles"
               >
-                <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8">
+                <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 导出
               </button>
               <button
-                class="flex items-center justify-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-500"
+                class="btn" style="font-size: 12px;"
                 @click="triggerImport"
               >
-                <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8">
+                <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M21 12v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5m0 0l5 5m-5-5v12" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 导入
@@ -364,94 +366,90 @@ onUnmounted(() => {
         </div>
 
         <!-- 右侧：编辑表单 -->
-        <div class="min-h-0 flex-1 overflow-y-auto p-4">
+        <div class="min-h-0 flex-1 overflow-y-auto p-[16px]">
           <template v-if="selectedRoleId || form.id">
-            <!-- 顶部操作区（2026-08-27 从底部上移）：删除 / 保存常驻页面最顶 -->
-            <div class="sticky top-0 z-10 mb-3 flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/95 p-2 backdrop-blur">
+            <!-- 顶部操作区 -->
+            <div class="sticky top-0 z-10 mb-[14px] flex items-center gap-2 rounded-lg border border-warm-subtle bg-warm-card/95 p-[10px] backdrop-blur">
               <template v-if="selectedRoleId">
                 <button
-                  class="flex items-center gap-1 rounded-lg bg-red-600/80 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-red-600"
+                  class="btn" style="color: var(--danger); border-color: var(--danger);"
                   @click="deleteCurrent"
                 >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
                     <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
                   删除角色
                 </button>
                 <button
-                  class="flex items-center gap-1 rounded-lg px-4 py-1.5 text-xs font-medium text-white transition-all duration-300"
+                  class="btn btn-primary"
                   :class="{
-                    'bg-sky-600/80 hover:bg-sky-600': saveState === 'idle',
-                    'cursor-wait bg-sky-600/50': saveState === 'saving',
-                    'scale-105 bg-emerald-600 shadow-lg shadow-emerald-600/30': saveState === 'ok',
-                    'bg-red-600': saveState === 'error',
+                    'cursor-wait opacity-70': saveState === 'saving',
+                    'scale-105': saveState === 'ok',
                   }"
                   :disabled="saveState === 'saving'"
                   @click="submitUpdate"
                 >
-                  <svg v-if="saveState === 'ok'" viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <svg v-if="saveState === 'ok'" viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="2.5">
                     <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
-                  <svg v-else viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <svg v-else viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="1.8">
                     <path d="M5 12h14M12 5l0 14" stroke-linecap="round" />
                   </svg>
                   {{ saveState === 'saving' ? '保存中…' : saveState === 'ok' ? '已保存' : saveState === 'error' ? '保存失败' : '保存修改' }}
                 </button>
-                <span class="ml-auto text-[10px] text-zinc-600">roles/{{ form.id }}/CLAUDE.md</span>
+                <span class="ml-auto text-[11px] text-warm-600">roles/{{ form.id }}/CLAUDE.md</span>
               </template>
               <template v-else>
                 <button
-                  class="flex items-center gap-1 rounded-lg bg-emerald-600/80 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-600"
+                  class="btn btn-primary"
                   @click="submitCreate"
                 >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 5v14M5 12h14" stroke-linecap="round" />
                   </svg>
                   创建角色
                 </button>
-                <span class="ml-auto text-[10px] text-zinc-600">新角色（填写左侧参数与右侧提示词）</span>
+                <span class="ml-auto text-[11px] text-warm-600">新角色（填写左侧参数与右侧提示词）</span>
               </template>
             </div>
 
-            <!-- 详情区（2026-08-27 排版调整）：左=角色参数（单列窄栏），右=提示词 -->
-            <div class="flex gap-3">
+            <!-- 详情区：左=角色参数，右=提示词 -->
+            <div class="flex gap-[14px]">
               <!-- 左：角色参数单列 -->
-              <div class="w-56 shrink-0 space-y-3">
+              <div class="w-[220px] shrink-0 space-y-[14px]">
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">角色ID</label>
+                  <label class="form-label block text-[12px] text-warm-500">角色ID</label>
                   <input
                     v-model="form.id"
                     type="text"
-                    class="w-full rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                    class="input"
                     :disabled="!!selectedRoleId"
                     placeholder="英文小写下划线，如: marketing_expert"
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">角色名称</label>
+                  <label class="form-label block text-[12px] text-warm-500">角色名称</label>
                   <input
                     v-model="form.name"
                     type="text"
-                    class="w-full rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                    class="input"
                     placeholder="显示名称"
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">音色（可试听对比响度）</label>
-                  <div class="flex gap-1.5">
+                  <label class="form-label block text-[12px] text-warm-500">音色（可试听对比响度）</label>
+                  <div class="flex gap-2">
                     <select
                       v-model="form.voice"
-                      class="min-w-0 flex-1 rounded-lg bg-zinc-800 px-2 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                      class="input min-w-0 flex-1"
                     >
                       <option v-for="v in availableVoices" :key="v.key" :value="v.key">
                         {{ v.name }}
                       </option>
                     </select>
                     <button
-                      class="shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] transition"
-                      :class="previewing
-                        ? 'border-sky-500/60 bg-sky-500/20 text-sky-300'
-                        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-sky-500/60 hover:text-sky-300'"
+                      class="btn shrink-0"
+                      :class="previewing ? 'btn-primary' : ''"
                       @click="testVoice"
                     >
                       {{ previewing ? '■ 停止' : '▶ 试听' }}
@@ -459,12 +457,12 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">主题色</label>
-                  <div class="grid grid-cols-4 gap-1">
+                  <label class="form-label block text-[12px] text-warm-500">主题色</label>
+                  <div class="grid grid-cols-4 gap-2">
                     <button
                       v-for="c in availableColors"
                       :key="c.key"
-                      class="h-6 rounded text-[10px] transition"
+                      class="h-[28px] rounded transition"
                       :class="`${form.color === c.key ? 'ring-2 ring-' + c.key + '-400' : ''} bg-${c.key}-500/20`"
                       @click="form.color = c.key"
                     >
@@ -472,65 +470,60 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">自动思考间隔（秒）</label>
+                  <label class="form-label block text-[12px] text-warm-500">自动思考间隔（秒）</label>
                   <input
                     v-model.number="form.thinkIntervalSec"
                     type="number"
                     min="2"
                     max="120"
                     step="1"
-                    class="w-full rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                    class="input"
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1" title="多个角色同一轮都想发言时，数字小的先说（1 最高）">发言优先级（1 先说）</label>
+                  <label class="form-label block text-[12px] text-warm-500" title="多个角色同一轮都想发言时，数字小的先说（1 最高）">发言优先级（1 先说）</label>
                   <input
                     v-model.number="form.priority"
                     type="number"
                     min="1"
                     max="99"
                     step="1"
-                    class="w-full rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                    class="input"
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-zinc-500 mb-1">行业标签</label>
+                  <label class="form-label block text-[12px] text-warm-500">行业标签</label>
                   <input
                     v-model="form.industryTag"
                     type="text"
-                    class="w-full rounded-lg bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                    class="input"
                     placeholder="如: 销售, 管理, 产品"
                   />
                 </div>
                 <div>
-                  <label class="flex items-center justify-between text-[11px] text-zinc-500 mb-1">
+                  <label class="flex items-center justify-between text-[12px] text-warm-500">
                     <span>语音播放</span>
-                    <span class="text-zinc-600">开启后语音播报</span>
+                    <span class="text-warm-600">开启后语音播报</span>
                   </label>
                   <button
                     role="switch"
                     :aria-checked="form.ttsEnabled"
-                    class="relative h-6 w-11 rounded-full transition"
-                    :class="form.ttsEnabled ? 'bg-sky-600' : 'bg-zinc-700'"
+                    class="switch mt-1"
+                    :class="{ on: form.ttsEnabled }"
                     @click="form.ttsEnabled = !form.ttsEnabled"
-                  >
-                    <span
-                      class="absolute top-1 h-4 w-4 rounded-full bg-white transition-all"
-                      :class="form.ttsEnabled ? 'left-6' : 'left-1'"
-                    />
-                  </button>
+                  />
                 </div>
               </div>
 
               <!-- 右：提示词编辑 -->
               <div class="flex min-w-0 flex-1 flex-col">
                 <div class="mb-1 flex items-center justify-between">
-                  <label class="text-[11px] text-zinc-500">角色提示词（完整）</label>
-                  <span class="text-[10px] text-zinc-600">roles/{{ form.id || 'new' }}/CLAUDE.md</span>
+                  <label class="text-[12px] text-warm-500">角色提示词（完整）</label>
+                  <span class="text-[11px] text-warm-600">roles/{{ form.id || 'new' }}/CLAUDE.md</span>
                 </div>
                 <textarea
                   v-model="form.prompt"
-                  class="w-full flex-1 min-h-[480px] resize-none rounded-lg bg-zinc-800 px-3 py-2 text-xs leading-6 text-zinc-200 outline-none ring-1 ring-zinc-700 focus:ring-sky-500/50"
+                  class="w-full flex-1 min-h-[480px] resize-none rounded-lg bg-warm-input px-3 py-2 text-[13px] leading-6 text-warm-100 outline-none ring-1 ring-warm-subtle focus:ring-accent-warm"
                   placeholder="在这里写下完整的角色提示词..."
                 />
               </div>
@@ -538,37 +531,37 @@ onUnmounted(() => {
           </template>
 
           <template v-else>
-            <div class="flex h-full items-center justify-center text-center text-xs text-zinc-600">
+            <div class="flex h-full items-center justify-center text-center text-[13px] text-warm-600">
               左侧选择一个角色编辑，或点击"新建角色"开始
             </div>
           </template>
 
           <!-- 预设推荐 -->
-          <div class="mt-4 border-t border-zinc-800 pt-4">
-            <h4 class="mb-2 text-xs font-medium text-zinc-400">内置预设（点击添加）</h4>
+          <div class="mt-[16px] border-t border-warm-subtle pt-[14px]">
+            <h4 class="mb-2 text-[13px] font-medium text-warm-300">内置预设（点击添加）</h4>
             <div class="space-y-3">
               <template v-for="group in presets" :key="group.industryTag">
-                <div class="mb-1 text-[11px] text-zinc-500">{{ group.industryTag }}</div>
-                <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                <div class="mb-1 text-[12px] text-warm-500">{{ group.industryTag }}</div>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div
                     v-for="preset in group.presets"
                     :key="preset.id"
-                    class="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2 transition hover:border-zinc-600"
+                    class="card card-hover p-[10px]"
                   >
-                    <div class="flex items-center justify-between gap-1">
-                      <span class="text-xs font-medium text-zinc-200">{{ preset.name }}</span>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-[13px] font-medium text-warm-100">{{ preset.name }}</span>
                       <button
-                        class="rounded bg-emerald-600/80 px-2 py-0.5 text-[10px] text-white transition hover:bg-emerald-600"
+                        class="btn btn-primary" style="height: 26px; padding: 0 10px; font-size: 11px;"
                         @click="addPreset(preset)"
                       >
                         添加
                       </button>
                     </div>
-                    <p class="mt-1 text-[11px] text-zinc-400 line-clamp-2">{{ preset.description }}</p>
+                    <p class="mt-1 text-[12px] text-warm-300 line-clamp-2">{{ preset.description }}</p>
                   </div>
                 </div>
               </template>
-              <div v-if="!presets.length" class="text-[11px] text-zinc-600">加载预设中...</div>
+              <div v-if="!presets.length" class="text-[12px] text-warm-600">加载预设中...</div>
             </div>
           </div>
         </div>

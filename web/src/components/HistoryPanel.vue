@@ -47,7 +47,6 @@ watch(expandId, async (id) => {
   totalDuration.value = 0
   expandedAudioUrl.value = null
   if (id) {
-    // 异步解析：本页会话内存 Blob 优先，否则取后端归档 Record/<id>/recording.webm
     expandedAudioUrl.value = await resolveAudioUrl(id)
   }
 })
@@ -111,9 +110,9 @@ function speakerLabel(speaker: string): string {
 }
 
 function speakerBadgeClass(speaker: string): string {
-  if (speaker === 'user') return 'bg-zinc-700/60 text-zinc-300'
+  if (speaker === 'user') return 'tag'
   const r = store.roleById.get(speaker)
-  return r ? roleColor(r.color).badge : 'bg-zinc-700/60 text-zinc-300'
+  return r ? roleColor(r.color).badge : 'tag'
 }
 
 function eventTypeLabel(type: string): string {
@@ -126,9 +125,9 @@ function eventTypeLabel(type: string): string {
 }
 
 function eventTypeBadgeClass(type: string, executed: boolean): string {
-  if (type === 'interrupt' && executed) return 'bg-amber-500/20 text-amber-400'
-  if (type === 'reply') return 'bg-sky-500/20 text-sky-400'
-  return 'bg-zinc-700/60 text-zinc-400'
+  if (type === 'interrupt' && executed) return 'tag-danger'
+  if (type === 'reply') return 'tag-info'
+  return 'tag'
 }
 
 function roleName(id: string): string {
@@ -181,48 +180,49 @@ function copyText(text: string): void {
 </script>
 
 <template>
-  <section class="flex min-h-0 min-w-0 flex-1 flex-col p-4">
+  <section class="flex min-h-0 min-w-0 flex-1 flex-col bg-warm-main p-[14px]">
     <!-- 头部 -->
-    <div class="mb-3 flex items-center gap-3">
+    <div class="mb-[14px] flex items-center gap-3" style="min-height: 40px;">
       <button
-        class="flex items-center gap-1 rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+        class="btn"
         @click="store.setView('live')"
       >
-        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         返回
       </button>
-      <h2 class="text-sm font-semibold text-zinc-100">会议历史</h2>
-      <span class="text-[11px] text-zinc-600">{{ store.history.length }} 场 · 本地保存</span>
+      <h2 class="text-[16px] font-semibold text-warm-100">会议历史</h2>
+      <span class="text-[13px] text-warm-500">{{ store.history.length }} 场 · 本地保存</span>
     </div>
 
     <!-- 列表 -->
-    <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-      <div v-if="!store.history.length" class="flex h-full items-center justify-center text-xs text-zinc-600">
+    <div class="min-h-0 flex-1 space-y-[10px] overflow-y-auto pr-1">
+      <div v-if="!store.history.length" class="flex h-full items-center justify-center text-[13px] text-warm-600">
         还没有归档的会议
       </div>
 
       <div
         v-for="e in store.history"
         :key="e.id"
-        class="cursor-pointer rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 transition hover:border-zinc-700"
+        class="card card-hover cursor-pointer p-[14px]"
+        style="min-height: 96px;"
         @click="toggleExpand(e.id)"
       >
         <!-- 行 1：标题 + 重要参数 -->
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-sm font-semibold text-zinc-100">{{ e.title }}</span>
-          <span class="text-[11px] text-zinc-500">{{ fmtDate(e.dateMs) }}</span>
-          <span class="text-[11px] text-zinc-500">时长 {{ fmtDur(e.durationMs) }}</span>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span class="text-[15px] font-semibold text-warm-100">{{ e.title }}</span>
+          <span class="text-[12px] text-warm-500">{{ fmtDate(e.dateMs) }}</span>
+          <span class="text-[12px] text-warm-500">时长 {{ fmtDur(e.durationMs) }}</span>
           <span
-            class="rounded-full px-2 py-0.5 text-[10px]"
-            :class="e.state === 'postTalk' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-500'"
+            class="tag"
+            :class="e.state === 'postTalk' ? 'tag-accent' : 'tag-success'"
           >
             {{ e.state === 'postTalk' ? '会后交流中' : '已结束' }}
           </span>
           <svg
             viewBox="0 0 24 24"
-            class="ml-auto h-3.5 w-3.5 text-zinc-600 transition"
+            class="ml-auto h-[14px] w-[14px] text-warm-600 transition"
             :class="{ 'rotate-90': expandId === e.id }"
             fill="none" stroke="currentColor" stroke-width="2"
           >
@@ -231,47 +231,47 @@ function copyText(text: string): void {
         </div>
 
         <!-- 行 2：内容文字部分 -->
-        <p class="mt-1.5 line-clamp-2 text-xs leading-5 text-zinc-400">{{ e.summaryText }}</p>
+        <p class="mt-[6px] line-clamp-2 text-[13px] leading-6 text-warm-300">{{ e.summaryText }}</p>
 
         <!-- 行 3：参与者 / AI 模型 -->
-        <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500">
-          <span class="flex items-center gap-1">
+        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-warm-500">
+          <span class="flex items-center gap-1.5">
             参与者
             <span
               v-for="p in e.participants"
               :key="p"
-              class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-400"
+              class="tag"
             >{{ p }}</span>
           </span>
-          <span>模型 <span class="text-zinc-400">{{ e.model }}</span></span>
+          <span>模型 <span class="text-warm-300">{{ e.model }}</span></span>
         </div>
 
         <!-- 展开态 -->
-        <div v-if="expandId === e.id" class="mt-3 space-y-3 border-t border-zinc-800 pt-2.5" @click.stop>
+        <div v-if="expandId === e.id" class="mt-3 space-y-3 border-t border-warm-subtle pt-[10px]" @click.stop>
           <!-- ① Claude 会话 ID 完整显示 -->
           <div>
-            <span class="text-[10px] font-medium text-zinc-500">Claude Code 会话</span>
-            <div class="mt-1 space-y-0.5">
+            <span class="text-[12px] font-medium text-warm-500">Claude Code 会话</span>
+            <div class="mt-1 space-y-1">
               <div
                 v-for="(sid, rid) in e.claudeSessionIds"
                 :key="rid"
-                class="flex items-center gap-2 text-[10px]"
+                class="flex items-center gap-2 text-[12px]"
               >
-                <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-400">{{ roleName(rid) }}</span>
-                <span class="font-mono text-zinc-500">{{ sid }}</span>
+                <span class="tag">{{ roleName(rid) }}</span>
+                <span class="font-mono text-warm-500">{{ sid }}</span>
                 <button
-                  class="text-zinc-600 transition hover:text-zinc-300"
+                  class="text-warm-600 transition hover:text-warm-300"
                   title="复制会话 ID"
                   @click="copyText(String(sid))"
                 >
-                  <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="11" height="11" rx="2" />
                     <path d="M5 15V5a2 2 0 0 1 2-2h10" stroke-linecap="round" />
                   </svg>
                 </button>
-                <!-- 用 Orca 打开该会话：cd 原目录 + claude --resume -->
+                <!-- 用 Orca 打开该会话 -->
                 <button
-                  class="flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition hover:bg-zinc-700 hover:text-sky-300"
+                  class="btn" style="height: 24px; padding: 0 8px; font-size: 11px;"
                   :class="openingSession === String(sid) ? 'opacity-50 pointer-events-none' : ''"
                   :title="`用 Orca 打开 ${roleName(rid)} 的 Claude 会话`"
                   @click="openClaudeSession(String(sid))"
@@ -282,16 +282,16 @@ function copyText(text: string): void {
                   <span>{{ openingSession === String(sid) ? '打开中…' : '打开Claude' }}</span>
                 </button>
               </div>
-              <div v-if="!Object.keys(e.claudeSessionIds).length" class="text-[10px] text-zinc-600">
+              <div v-if="!Object.keys(e.claudeSessionIds).length" class="text-[12px] text-warm-600">
                 （本场无 Claude 会话）
               </div>
             </div>
           </div>
 
-          <!-- ② 录音回放（播放/快进快退/进度条拖动） -->
+          <!-- ② 录音回放 -->
           <div>
-            <span class="text-[10px] font-medium text-zinc-500">录音回放</span>
-            <div v-if="expandedAudioUrl" class="mt-1 rounded-lg bg-zinc-950/60 p-2.5">
+            <span class="text-[12px] font-medium text-warm-500">录音回放</span>
+            <div v-if="expandedAudioUrl" class="mt-1 rounded-lg bg-warm-input p-[10px]">
               <audio
                 ref="audioRef"
                 :src="expandedAudioUrl"
@@ -305,18 +305,19 @@ function copyText(text: string): void {
               <div class="flex items-center gap-2">
                 <!-- 快退 -->
                 <button
-                  class="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200"
+                  class="flex h-7 w-7 items-center justify-center rounded-full text-warm-300 transition hover:bg-warm-tag hover:text-warm-100"
                   title="后退 10 秒"
                   @click="seek(-SEEK_STEP)"
                 >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor">
+                  <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="currentColor">
                     <path d="M11 12l9-7v14l-9-7z" />
                     <rect x="2" y="5" width="2.5" height="14" rx="1" />
                   </svg>
                 </button>
                 <!-- 播放/暂停 -->
                 <button
-                  class="flex h-8 w-8 items-center justify-center rounded-full bg-sky-600/90 text-white transition hover:bg-sky-600"
+                  class="flex h-8 w-8 items-center justify-center rounded-full text-white transition"
+                  style="background: var(--info);"
                   :title="playing ? '暂停' : '播放'"
                   @click="togglePlay"
                 >
@@ -330,91 +331,92 @@ function copyText(text: string): void {
                 </button>
                 <!-- 快进 -->
                 <button
-                  class="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200"
+                  class="flex h-7 w-7 items-center justify-center rounded-full text-warm-300 transition hover:bg-warm-tag hover:text-warm-100"
                   title="前进 10 秒"
                   @click="seek(SEEK_STEP)"
                 >
-                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor">
+                  <svg viewBox="0 0 24 24" class="h-[14px] w-[14px]" fill="currentColor">
                     <path d="M13 12L4 5v14l9-7z" />
                     <rect x="19.5" y="5" width="2.5" height="14" rx="1" />
                   </svg>
                 </button>
                 <!-- 时间 -->
-                <span class="font-mono text-[10px] tabular-nums text-zinc-400">
+                <span class="font-mono text-[12px] tabular-nums text-warm-300">
                   {{ fmtSec(currentTime) }} / {{ fmtSec(totalDuration) }}
                 </span>
               </div>
-              <!-- 进度条（点击任意位置跳转） -->
+              <!-- 进度条 -->
               <input
                 type="range"
                 min="0"
                 :max="totalDuration || 0"
                 step="0.1"
                 :value="currentTime"
-                class="mt-2 w-full accent-sky-500"
+                class="mt-2 w-full"
+                style="accent-color: var(--info);"
                 @input="onSeekInput"
               />
             </div>
-            <div v-else class="mt-1 rounded-lg bg-zinc-950/60 p-2.5 text-[10px] text-zinc-600">
+            <div v-else class="mt-1 rounded-lg bg-warm-input p-[10px] text-[12px] text-warm-600">
               （本场音频未归档：旧版本会议或录音时间过短无有效数据）
             </div>
           </div>
 
-          <!-- ③ 合并时间线（默认前 2 条 + 全览按钮） -->
+          <!-- ③ 合并时间线 -->
           <div>
             <div class="flex items-center justify-between">
-              <span class="text-[10px] font-medium text-zinc-500">对话时间线</span>
+              <span class="text-[12px] font-medium text-warm-500">对话时间线</span>
               <button
                 v-if="getCombinedTimeline(e).length > 2"
-                class="rounded-md bg-sky-600/80 px-2.5 py-1 text-[10px] font-medium text-white transition hover:bg-sky-600"
+                class="btn btn-primary" style="height: 26px; padding: 0 10px; font-size: 11px;"
                 @click="toggleFullView(e.id)"
               >
                 {{ fullViewId === e.id ? '收起' : '全览' }}
               </button>
             </div>
-            <div class="mt-1 space-y-1">
+            <div class="mt-1 space-y-1.5">
               <template v-if="e.transcripts.length || e.agentEvents?.length">
                 <div
                   v-for="(item, i) in getVisibleTimeline(e)"
                   :key="i"
-                  class="flex items-start gap-2 text-[11px] leading-5"
+                  class="flex items-start gap-2 text-[13px] leading-6"
                 >
-                  <span class="shrink-0 pt-0.5 font-mono text-[10px] tabular-nums text-zinc-600">
+                  <span class="shrink-0 pt-0.5 font-mono text-[11px] tabular-nums text-warm-600">
                     {{ msToStamp(item.tsMs) }}
                   </span>
                   <!-- 用户转写 -->
                   <template v-if="item.type === 'transcript'">
-                    <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none bg-zinc-700/60 text-zinc-300">
+                    <span class="shrink-0 tag">
                       [{{ speakerLabel((item.data as HistoryTranscriptItem).speaker) }}]
                     </span>
-                    <p class="text-zinc-300">{{ (item.data as HistoryTranscriptItem).text }}</p>
+                    <p class="text-warm-100">{{ (item.data as HistoryTranscriptItem).text }}</p>
                   </template>
                   <!-- AI 角色事件 -->
                   <template v-else>
                     <span
-                      class="shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none"
+                      class="shrink-0 tag"
                       :class="speakerBadgeClass((item.data as HistoryAgentEvent).role)"
                     >
                       [{{ roleName((item.data as HistoryAgentEvent).role) }}]
                     </span>
                     <span
-                      class="shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none"
+                      class="shrink-0 tag"
                       :class="eventTypeBadgeClass((item.data as HistoryAgentEvent).type, (item.data as HistoryAgentEvent).executed)"
                     >
                       {{ eventTypeLabel((item.data as HistoryAgentEvent).type) }}
                     </span>
-                    <p class="text-zinc-300">{{ (item.data as HistoryAgentEvent).text }}</p>
+                    <p class="text-warm-100">{{ (item.data as HistoryAgentEvent).text }}</p>
                   </template>
                 </div>
                 <!-- 折叠提示 -->
                 <div
                   v-if="fullViewId !== e.id && getCombinedTimeline(e).length > 2"
-                  class="pt-0.5 text-center text-[10px] text-zinc-600"
+                  class="pt-1 text-center text-[12px] text-warm-600"
                 >
                   还有 {{ getCombinedTimeline(e).length - 2 }} 条，点「全览」查看
                 </div>
               </template>
-              <div v-else class="py-2 text-center text-[11px] text-zinc-600">
+              <div v-else class="py-2 text-center text-[13px] text-warm-600">
                 （无内容）
               </div>
             </div>

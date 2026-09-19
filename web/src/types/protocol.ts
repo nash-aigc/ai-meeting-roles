@@ -64,6 +64,7 @@ export type ServerMessage =
       executed: boolean // 可打断模式=true；不打断模式降级为 observe
       tsMs: number
     }
+  | { type: 'agent.state'; role: string; state: string; detail: string } // 角色运行状态更新（时间线）
   | { type: 'tts.start'; role: string; windowId: string }
   | { type: 'tts.end'; windowId: string }
   | { type: 'asr.status'; status: 'loading' | 'ready' | 'unloaded' | 'error'; detail?: string }
@@ -87,6 +88,7 @@ export interface RoleInfo {
   voice: string // CosyVoice 音色名
   color: string // 前端主题色（tailwind 色系标识）
   enabled: boolean
+  defaultEnabled: boolean // 是否默认启动（新会话/重置时是否自动启用）
   thinkIntervalSec: number // 每隔多少秒"思考一次"（默认 60）
   ttsEnabled: boolean // 是否允许该角色语音播放
   interruptEnabled: boolean // 该角色「可打断」开关（列头控件；默认 false 不打扰）
@@ -125,7 +127,8 @@ export const DEFAULT_ROLES: RoleInfo[] = [
     name: '客户',
     voice: '高晴',
     color: 'sky',
-    enabled: true,
+    enabled: false,
+    defaultEnabled: false,
     thinkIntervalSec: DEFAULT_THINK_INTERVAL,
     ttsEnabled: false,
     interruptEnabled: false,
@@ -139,7 +142,8 @@ export const DEFAULT_ROLES: RoleInfo[] = [
     name: '老板',
     voice: '王新月',
     color: 'amber',
-    enabled: true,
+    enabled: false,
+    defaultEnabled: false,
     thinkIntervalSec: DEFAULT_THINK_INTERVAL,
     ttsEnabled: false,
     interruptEnabled: false,

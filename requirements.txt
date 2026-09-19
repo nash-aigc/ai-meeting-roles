@@ -1,0 +1,15 @@
+# ai-meeting-roles 服务端依赖（由 server/ 下的 import 归集得出，项目原本缺此清单）
+#
+# 版本已按 2026-09-20 首次成功构建的容器实测结果锁定（镜像 ai-meeting-roles:local）。
+# 如将来需要放宽，改成 >= 即可；但注意 websockets 的 API 在 14.0 发生过不兼容改名：
+#   websockets ≤13 用 extra_headers，≥14 用 additional_headers
+# 服务端 main.py 用的是**新 API**（websockets.asyncio.client.connect + additional_headers），
+# 因此必须 ≥14；仓库里自带的 scripts/e2e_agent_probe.py 反而还在用旧名 extra_headers，
+# 直接跑会 TypeError（那是脚本陈旧，与本服务端无关）。
+#
+# 另：项目自带一个极简 .env 解析器（server/gateway/main.py 的 _load_dotenv），
+#    因此**不需要** python-dotenv。
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+websockets==17.1
+dashscope==1.27.6

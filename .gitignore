@@ -19,3 +19,9 @@ Record/
 .env
 .env.*
 !.env.example
+
+# ── 容器化部署（2026-09-20）──────────────────────────────
+# 含真实 Claude 鉴权 token 的挂载文件：由 docker/prepare-claude-config.sh 生成，绝不入库
+docker/claude-settings.json
+# 隔离配置目录（onboarding 态、projects/ 会话记录）
+docker/claude-home/
