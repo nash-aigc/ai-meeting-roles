@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 会议监听助手 — 风格原型</title>
+<style>
+  /* ========== 设计令牌（从参考图提取的温暖深棕主题） ========== */
+  :root {
+    /* 背景层级 */
+    --bg-deepest:    #12110e;   /* 最底层 */
+    --bg-sidebar:    #181612;   /* 侧边栏 */
+    --bg-main:       #1c1915;   /* 主内容区 */
+    --bg-card:       #171511;   /* 卡片/面板 */
+    --bg-card-hover: #1f1c17;   /* 卡片悬停 */
+    --bg-selected:   #211e18;   /* 选中项 */
+    --bg-input:      #141310;   /* 输入框 */
+    --bg-tag:        #23201a;   /* 标签背景 */
+
+    /* 边框 */
+    --border-subtle: #26231d;
+    --border-normal: #2e2a23;
+    --border-hover:  #3d3830;
+
+    /* 文字 */
+    --text-primary:   #e6e2d8;
+    --text-secondary: #969184;
+    --text-tertiary:  #635e52;
+    --text-muted:     #4a463d;
+
+    /* 强调色 */
+    --accent:        #c9a85c;   /* 暖琥珀色（图标/高亮） */
+    --accent-soft:   #c9a85c22;
+    --success:       #7aab7a;   /* 柔和绿（启用/录音中） */
+    --success-soft:  #7aab7a18;
+    --danger:        #c07a6a;   /* 柔和红（结束/删除） */
+    --danger-soft:   #c07a6a18;
+    --info:          #8aa8c0;   /* 柔和蓝（链接/信息） */
+
+    /* 圆角 */
+    --radius-sm:  6px;
+    --radius-md:  8px;
+    --radius-lg:  10px;
+    --radius-xl:  12px;
+
+    /* 间距 */
+    --gap-xs: 4px;
+    --gap-sm: 6px;
+    --gap-md: 10px;
+    --gap-lg: 14px;
+
+    /* 字号（整体放大，确保可读性） */
+    --fs-11: 11px;   /* 最小标签/badge */
+    --fs-12: 12px;   /* 辅助说明 */
+    --fs-13: 13px;   /* 正文/描述 */
+    --fs-14: 14px;   /* 卡片标题/按钮文字 */
+    --fs-15: 15px;   /* 区块标题 */
+    --fs-16: 16px;   /* 重要标题 */
+    --fs-20: 20px;   /* 页面大标题 */
+    --fs-28: 28px;   /* 计时器 */
+
+    /* 组件统一高度 */
+    --h-btn: 34px;
+    --h-input: 34px;
+    --h-listitem: 60px;
+    --h-topbar: 52px;
+    --h-rolebar: 56px;
+    --pad-card: 14px;
+    --pad-card-y: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg-deepest);
+    color: var(--text-primary);
+    font-size: var(--fs-13);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ========== 通用组件 ========== */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+  }
+  .card-hover:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-card-hover);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: var(--fs-11);
+    background: var(--bg-tag);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+  .tag-success { background: var(--success-soft); color: var(--success); }
+  .tag-accent  { background: var(--accent-soft); color: var(--accent); }
+  .tag-danger  { background: var(--danger-soft); color: var(--danger); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: var(--h-btn);
+    padding: 0 14px;
+    border-radius: var(--radius-md);
+    font-size: var(--fs-13);
+    font-weight: 500;
+    border: 1px solid var(--border-normal);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
+  .btn-primary {
+    background: var(--accent);
+    color: #1a1712;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #d4b46a; border-color: #d4b46a; }
+  .btn-ghost { border-color: transparent; }
+  .btn-ghost:hover { background: var(--bg-selected); }
+
+  .input {
+    width: 100%;
+    height: var(--h-input);
+    padding: 0 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--fs-13);
+    outline: none;
+    transition: border-color .15s;
+  }
+  .input:focus { border-color: var(--accent); }
+  .input::placeholder { color: var(--text-muted); }
+
+  .divider { height: 1px; background: var(--border-subtle); }
+
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot-success { background: var(--success); }
+  .dot-accent  { background: var(--accent); }
+  .dot-muted   { background: var(--text-muted); }
+
+  /* 开关 */
+  .switch {
+    position: relative;
+    width: 38px; height: 20px;
+    border-radius: 10px;
+    background: #33302a;
+    cursor: pointer;
+    transition: background .2s;
+    flex-shrink: 0;
+  }
+  .switch.on { background: var(--success); }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #d8d4ca;
+    transition: left .2s;
+  }
+  .switch.on::after { left: 20px; background: #fff; }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-thumb { background: #33302a; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ========== 页面布局 ========== */
+  .page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* 顶栏 */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: var(--h-topbar);
+    padding: 0 18px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #3a6b5a, #2a5a6b);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #e6e2d8;
+  }
+  .brand-name { font-size: var(--fs-15); font-weight: 600; color: var(--text-primary); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 11px; border-radius: 11px;
+    font-size: var(--fs-12);
+    background: var(--success-soft); color: var(--success);
+  }
+  .topbar-spacer { flex: 1; }
+
+  /* 主体 */
+  .main { display: flex; flex: 1; min-height: 0; }
+
+  /* 左侧面板 */
+  .left-panel {
+    width: 380px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--gap-lg);
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    overflow-y: auto;
+  }
+
+  /* 会议标题卡 */
+  .meeting-title-card { padding: 0; overflow: hidden; }
+  .meeting-title-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    min-height: 48px;
+  }
+  .meeting-title-row svg { width: 16px; height: 16px; color: var(--text-tertiary); flex-shrink: 0; }
+  .meeting-title { font-size: var(--fs-14); font-weight: 500; color: var(--text-primary); flex: 1; }
+  .meeting-meta-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 14px;
+    font-size: var(--fs-12); color: var(--text-secondary);
+    min-height: 38px;
+  }
+  .meta-item { display: flex; align-items: center; gap: 5px; }
+  .params-toggle { margin-left: auto; display: flex; align-items: center; gap: 4px; color: var(--text-tertiary); cursor: pointer; font-size: var(--fs-12); }
+  .params-toggle:hover { color: var(--text-secondary); }
+
+  /* 录音控制卡 */
+  .recorder-card {
+    padding: 16px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 84px;
+  }
+  .record-btn {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--success);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all .15s;
+    flex-shrink: 0;
+    box-shadow: 0 2px 14px rgba(122,171,122,.3);
+  }
+  .record-btn:hover { background: #8aba8a; }
+  .record-btn svg { width: 22px; height: 22px; color: #fff; }
+  .stop-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bg-tag);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-secondary);
+    flex-shrink: 0; transition: all .15s;
+  }
+  .stop-btn:hover { background: var(--danger-soft); color: var(--danger); }
+  .stop-btn svg { width: 16px; height: 16px; }
+  .timer-block { display: flex; flex-direction: column; gap: 2px; }
+  .timer { font-family: "SF Mono", "Menlo", monospace; font-size: var(--fs-28); font-weight: 700; color: var(--text-primary); letter-spacing: 1px; line-height: 1.1; }
+  .timer-sub { font-size: var(--fs-12); color: var(--text-tertiary); }
+
+  /* ASR 设置折叠卡 */
+  .asr-card { overflow: hidden; }
+  .asr-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px; cursor: pointer;
+    min-height: 44px;
+  }
+  .asr-header-left { display: flex; align-items: center; gap: 8px; }
+  .asr-header-title { font-size: var(--fs-13); font-weight: 500; color: var(--text-secondary); }
+  .asr-body { padding: 12px 14px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 12px; }
+  .form-label { font-size: var(--fs-12); color: var(--text-tertiary); margin-bottom: 5px; display: block; }
+  .segmented {
+    display: flex; padding: 3px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+  .segmented button {
+    flex: 1; padding: 6px 0; border: none; background: transparent;
+    font-size: var(--fs-12); color: var(--text-tertiary); border-radius: 6px; cursor: pointer;
+  }
+  .segmented button.active { background: var(--bg-selected); color: var(--text-primary); font-weight: 500; }
+
+  /* 转写面板 */
+  .transcript-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .transcript-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px; border-bottom: 1px solid var(--border-subtle);
+    min-height: 42px;
+  }
+  .transcript-title { font-size: var(--fs-13); font-weight: 500; color: var(--text-secondary); }
+  .transcript-count { font-size: var(--fs-12); color: var(--text-tertiary); }
+  .transcript-body { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  .transcript-empty {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    font-size: var(--fs-13); color: var(--text-muted);
+  }
+  .transcript-item { padding: 6px 0; font-size: var(--fs-13); color: var(--text-primary); line-height: 1.65; }
+  .transcript-item .ts { font-size: var(--fs-11); color: var(--text-muted); margin-right: 8px; font-family: monospace; }
+
+  /* 右侧区域 */
+  .right-panel {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    gap: var(--gap-md);
+    padding: var(--gap-lg);
+    background: var(--bg-main);
+    overflow: hidden;
+  }
+
+  /* 角色栏 */
+  .role-bar {
+    display: flex; align-items: center; gap: var(--gap-md);
+    padding: 0 16px;
+    min-height: var(--h-rolebar);
+  }
+  .role-bar-label { font-size: var(--fs-14); font-weight: 600; color: var(--text-secondary); }
+  .role-bar-meta { font-size: var(--fs-12); color: var(--text-tertiary); }
+  .role-bar-controls { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .control-group { display: flex; align-items: center; gap: 8px; font-size: var(--fs-13); color: var(--text-secondary); }
+
+  /* 角色列 */
+  .agent-feed { flex: 1; min-height: 0; display: flex; gap: var(--gap-md); }
+  .agent-column {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+  .agent-col-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    min-height: 56px;
+  }
+  .agent-avatar {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+  }
+  .agent-name { font-size: var(--fs-14); font-weight: 600; color: var(--text-primary); }
+  .agent-desc { font-size: var(--fs-12); color: var(--text-tertiary); margin-top: 1px; }
+  .agent-col-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .interrupt-badge {
+    font-size: var(--fs-11); padding: 2px 8px; border-radius: 9px;
+    background: var(--bg-tag); color: var(--text-tertiary);
+  }
+  .interrupt-badge.active { background: var(--danger-soft); color: var(--danger); }
+  .agent-col-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* AI 消息卡片 */
+  .ai-card {
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    font-size: var(--fs-13);
+    line-height: 1.65;
+    color: var(--text-primary);
+    animation: slideIn .25s ease-out;
+  }
+  .ai-card.observe { border-left: 3px solid var(--text-tertiary); color: var(--text-secondary); }
+  .ai-card.reply   { border-left: 3px solid var(--info); }
+  .ai-card.interrupt { border-left: 3px solid var(--danger); background: var(--danger-soft); }
+  .ai-card.listen  { border-left: 3px solid var(--accent); color: var(--text-tertiary); font-style: italic; }
+  .ai-card-type { font-size: var(--fs-11); color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 底部提示条 */
+  .bottom-hint {
+    flex-shrink: 0;
+    padding: 9px 18px;
+    text-align: center;
+    font-size: var(--fs-12);
+    color: var(--text-tertiary);
+    background: var(--bg-sidebar);
+    border-top: 1px solid var(--border-subtle);
+    min-height: 36px;
+  }
+
+  /* ========== 设置页风格（参考图三栏式） ========== */
+  .settings-layout { display: flex; flex: 1; min-height: 0; }
+  .settings-nav {
+    width: 200px; flex-shrink: 0;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    padding: 16px 10px;
+    overflow-y: auto;
+  }
+  .settings-nav-title {
+    font-size: var(--fs-11); font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .8px;
+    padding: 8px 12px 6px; margin-bottom: 4px;
+  }
+  .settings-nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: var(--radius-md);
+    font-size: var(--fs-13); color: var(--text-secondary);
+    cursor: pointer; margin-bottom: 2px;
+    min-height: 38px;
+  }
+  .settings-nav-item:hover { background: var(--bg-selected); color: var(--text-primary); }
+  .settings-nav-item.active { background: var(--bg-selected); color: var(--text-primary); font-weight: 500; }
+  .settings-nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .75; }
+  .settings-content {
+    flex: 1; min-width: 0; overflow-y: auto;
+    padding: 24px 32px;
+  }
+  .settings-page-title { font-size: var(--fs-20); font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+  .settings-page-desc { font-size: var(--fs-13); color: var(--text-tertiary); margin-bottom: 24px; line-height: 1.6; }
+
+  .settings-section { margin-bottom: 28px; }
+  .settings-section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: var(--fs-15); font-weight: 600; color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+  .settings-section-title svg { width: 17px; height: 17px; color: var(--accent); }
+
+  /* 统计卡片行 */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stat-label { font-size: var(--fs-12); color: var(--text-tertiary); margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .stat-value { font-size: var(--fs-20); font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+
+  /* 列表项（设置页） */
+  .list-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all .15s;
+    min-height: var(--h-listitem);
+  }
+  .list-item:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+  .list-item-icon {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: var(--bg-tag);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .list-item-icon svg { width: 16px; height: 16px; color: var(--accent); }
+  .list-item-body { flex: 1; min-width: 0; }
+  .list-item-title { font-size: var(--fs-14); font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .list-item-desc { font-size: var(--fs-12); color: var(--text-tertiary); margin-top: 3px; line-height: 1.5; }
+  .list-item-arrow { color: var(--text-muted); flex-shrink: 0; }
+
+  /* 分组标题 */
+  .group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 2px; margin-bottom: 8px;
+  }
+  .group-title { font-size: var(--fs-13); font-weight: 600; color: var(--text-secondary); }
+  .group-count { font-size: var(--fs-12); color: var(--text-muted); }
+
+  /* ========== 历史页风格 ========== */
+  .history-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px;
+    min-height: 40px;
+  }
+  .history-title { font-size: var(--fs-16); font-weight: 600; color: var(--text-primary); }
+  .history-meta { font-size: var(--fs-13); color: var(--text-tertiary); }
+
+  .history-item {
+    padding: 14px 16px; margin-bottom: 10px;
+    cursor: pointer;
+    min-height: 96px;
+  }
+  .history-item-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .history-item-title { font-size: var(--fs-15); font-weight: 600; color: var(--text-primary); }
+  .history-item-time { font-size: var(--fs-12); color: var(--text-tertiary); }
+  .history-item-summary { font-size: var(--fs-13); color: var(--text-secondary); margin-top: 6px; line-height: 1.6; }
+  .history-item-tags { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: var(--fs-12); color: var(--text-tertiary); }
+
+  /* ========== 原型说明 ========== */
+  .prototype-note {
+    position: fixed; bottom: 14px; right: 14px;
+    background: var(--bg-card); border: 1px solid var(--border-normal);
+    border-radius: var(--radius-lg); padding: 12px 16px;
+    font-size: var(--fs-12); color: var(--text-secondary);
+    max-width: 300px; z-index: 100;
+    line-height: 1.6;
+  }
+  .prototype-note strong { color: var(--accent); }
+
+  .view-tabs {
+    display: flex; gap: 3px; padding: 4px;
+    background: var(--bg-input); border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    margin-left: auto;
+  }
+  .view-tabs button {
+    padding: 6px 16px; border: none; background: transparent;
+    font-size: var(--fs-13); color: var(--text-tertiary); border-radius: 6px; cursor: pointer;
+    font-weight: 500;
+  }
+  .view-tabs button.active { background: var(--bg-selected); color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="page" id="app">
+  <!-- ===== 顶栏 ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">M</div>
+      <span class="brand-name">AI 会议监听助手</span>
+    </div>
+    <span class="status-pill"><span class="dot dot-success"></span>空闲</span>
+
+    <div class="view-tabs">
+      <button class="active" onclick="showView('live')">会议面板</button>
+      <button onclick="showView('settings')">设置页</button>
+      <button onclick="showView('history')">历史页</button>
+    </div>
+
+    <div class="topbar-spacer"></div>
+    <button class="btn">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      会议历史 <span class="tag">3</span>
+    </button>
+  </header>
+
+  <!-- ===== 视图：会议面板 ===== -->
+  <div class="main" id="view-live">
+    <!-- 左侧 -->
+    <aside class="left-panel">
+      <!-- 会议标题卡 -->
+      <div class="card meeting-title-card">
+        <div class="meeting-title-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+          <span class="meeting-title">未命名会议（点击编辑）</span>
+        </div>
+        <div class="meeting-meta-row">
+          <span class="meta-item"><span class="dot dot-muted"></span>待机</span>
+          <span class="meta-item"><span class="dot dot-accent"></span>语音识别 火山·bigmodel</span>
+          <span class="params-toggle">参数 <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+        </div>
+      </div>
+
+      <!-- 录音控制卡 -->
+      <div class="card recorder-card">
+        <div class="record-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a6 6 0 0 0-6 6v3a6 6 0 0 0 12 0V9a6 6 0 0 0-6-6z"/><path d="M6 14h12v1a6 6 0 0 1-12 0v-1z"/></svg>
+        </div>
+        <div class="timer-block">
+          <span class="timer">00:00:00</span>
+          <span class="timer-sub">准备就绪</span>
+        </div>
+      </div>
+
+      <!-- ASR 设置卡 -->
+      <div class="card asr-card">
+        <div class="asr-header">
+          <div class="asr-header-left">
+            <span class="dot dot-success"></span>
+            <span class="asr-header-title">语音识别设置</span>
+            <span class="tag">火山引擎 · bigmodel</span>
+          </div>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-tertiary)"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="asr-body">
+          <div>
+            <span class="form-label">语音识别服务商</span>
+            <div class="segmented">
+              <button class="active">火山引擎</button>
+              <button>阿里云</button>
+            </div>
+          </div>
+          <div>
+            <span class="form-label">API Key</span>
+            <input class="input" type="text" placeholder="粘贴 API Key（UUID 格式）" value="b7d7f640-****-****-****-************">
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" style="flex:1;">从 .env 导入</button>
+            <button class="btn">恢复默认</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 转写面板 -->
+      <div class="card transcript-card">
+        <div class="transcript-header">
+          <span class="transcript-title">实时转写</span>
+          <span class="transcript-count">0 条 · 双击可编辑</span>
+        </div>
+        <div class="transcript-body">
+          <div class="transcript-empty">开始录音后，转写内容将实时显示在这里</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧 -->
+    <section class="right-panel">
+      <!-- 角色栏 -->
+      <div class="card role-bar">
+        <span class="role-bar-label">AI 生成内容</span>
+        <span class="role-bar-meta">2 个角色活跃 · 语音按队列依次播放</span>
+        <div class="role-bar-controls">
+          <div class="control-group">
+            <span>AI 总开关</span>
+            <div class="switch on"></div>
+          </div>
+          <div class="control-group">
+            <span>语音播放</span>
+            <div class="switch on"></div>
+          </div>
+          <button class="btn btn-ghost">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            角色管理
+          </button>
+        </div>
+      </div>
+
+      <!-- 角色列 -->
+      <div class="agent-feed">
+        <!-- 客户 -->
+        <div class="agent-column">
+          <div class="agent-col-header">
+            <div class="agent-avatar" style="background:#2a4a5a;color:#8ab8d0;">客</div>
+            <div>
+              <div class="agent-name">客户</div>
+              <div class="agent-desc">有顾虑的潜在客户</div>
+            </div>
+            <div class="agent-col-actions">
+              <span class="interrupt-badge">不打扰</span>
+              <div class="switch"></div>
+            </div>
+          </div>
+          <div class="agent-col-body">
+            <div class="ai-card observe">
+              <div class="ai-card-type">观点</div>
+              他还没说到价格，先听听他怎么定义价值。
+            </div>
+            <div class="ai-card listen">
+              <div class="ai-card-type">再听听</div>
+              目前没有值得回应的点，继续听。
+            </div>
+          </div>
+        </div>
+
+        <!-- 老板 -->
+        <div class="agent-column">
+          <div class="agent-col-header">
+            <div class="agent-avatar" style="background:#5a4a2a;color:#d0b878;">老</div>
+            <div>
+              <div class="agent-name">老板</div>
+              <div class="agent-desc">管理层视角</div>
+            </div>
+            <div class="agent-col-actions">
+              <span class="interrupt-badge active">可打断</span>
+              <div class="switch on"></div>
+            </div>
+          </div>
+          <div class="agent-col-body">
+            <div class="ai-card reply">
+              <div class="ai-card-type">回复</div>
+              这个方案的 ROI 测算逻辑需要再确认，三个月回本的假设偏乐观。
+            </div>
+            <div class="ai-card interrupt">
+              <div class="ai-card-type">插话</div>
+              等一下，你说的"行业领先"具体指哪个指标？
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== 视图：设置页（三栏式，参考图风格） ===== -->
+  <div class="main" id="view-settings" style="display:none;">
+    <!-- 左侧导航（模拟参考图的中间菜单列） -->
+    <nav class="settings-nav">
+      <div class="settings-nav-title">会议设置</div>
+      <div class="settings-nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        语音识别
+      </div>
+      <div class="settings-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M4 22a8 8 0 0 1 16 0"/></svg>
+        AI 角色
+      </div>
+      <div class="settings-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
+        语音合成
+      </div>
+      <div class="settings-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        打断策略
+      </div>
+      <div class="settings-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        会议归档
+      </div>
+      <div class="settings-nav-title">系统</div>
+      <div class="settings-nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        关于
+      </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="settings-content">
+      <h1 class="settings-page-title">语音识别</h1>
+      <p class="settings-page-desc">配置实时语音识别引擎，用户录音将实时转写为文字并推送给 AI 角色。</p>
+
+      <!-- 统计卡片 -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label"><span class="dot dot-accent"></span>识别引擎</div>
+          <div class="stat-value" style="font-size:16px;">火山 · bigmodel</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="dot dot-success"></span>已配置</div>
+          <div class="stat-value">是</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="dot dot-muted"></span>今日转写</div>
+          <div class="stat-value">12 条</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="dot dot-muted"></span>平均延迟</div>
+          <div class="stat-value">0.8s</div>
+        </div>
+      </div>
+
+      <!-- 引擎选择 -->
+      <div class="settings-section">
+        <div class="settings-section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/></svg>
+          识别引擎
+        </div>
+        <div class="segmented" style="max-width:420px;">
+          <button class="active">火山豆包流式（云端 · 按时长计费）</button>
+          <button>浏览器内置（降级）</button>
+        </div>
+      </div>
+
+      <!-- 已启用列表（模拟参考图的插件列表） -->
+      <div class="settings-section">
+        <div class="group-header">
+          <span class="group-title">已配置角色</span>
+          <span class="group-count">此分组下共有 2 个角色</span>
+        </div>
+
+        <div class="list-item">
+          <div class="list-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M4 22a8 8 0 0 1 16 0"/></svg>
+          </div>
+          <div class="list-item-body">
+            <div class="list-item-title">
+              客户
+              <span class="tag tag-success">已启用</span>
+              <span class="tag">用户</span>
+              <span class="tag">音色 · 高晴</span>
+            </div>
+            <div class="list-item-desc">有顾虑的潜在客户，会从价格、价值、风险三个维度评估你的表达。</div>
+          </div>
+          <div class="switch on"></div>
+          <svg class="list-item-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+
+        <div class="list-item">
+          <div class="list-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M4 22a8 8 0 0 1 16 0"/></svg>
+          </div>
+          <div class="list-item-body">
+            <div class="list-item-title">
+              老板
+              <span class="tag tag-success">已启用</span>
+              <span class="tag">用户</span>
+              <span class="tag">音色 · 王新月</span>
+            </div>
+            <div class="list-item-desc">管理层视角，关注 ROI、执行风险和团队资源，提问犀利直接。</div>
+          </div>
+          <div class="switch on"></div>
+          <svg class="list-item-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+
+      <!-- 已禁用 -->
+      <div class="settings-section">
+        <div class="group-header">
+          <span class="group-title">已禁用</span>
+          <span class="group-count">此分组下共有 1 个角色</span>
+        </div>
+        <div class="list-item" style="opacity:.55;">
+          <div class="list-item-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/></svg>
+          </div>
+          <div class="list-item-body">
+            <div class="list-item-title">
+              产品经理
+              <span class="tag tag-danger">已禁用</span>
+              <span class="tag">用户</span>
+            </div>
+            <div class="list-item-desc">关注产品逻辑、用户体验和技术可行性。</div>
+          </div>
+          <div class="switch"></div>
+          <svg class="list-item-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 视图：历史页 ===== -->
+  <div class="main" id="view-history" style="display:none;">
+    <section class="right-panel" style="width:100%;">
+      <div class="history-header">
+        <button class="btn">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <span class="history-title">会议历史</span>
+        <span class="history-meta">3 场 · 本地保存</span>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;">
+        <div class="card card-hover history-item">
+          <div class="history-item-row1">
+            <span class="history-item-title">产品方案评审会</span>
+            <span class="history-item-time">09-08 14:30</span>
+            <span class="history-item-time">时长 12 分 30 秒</span>
+            <span class="tag tag-success">已结束</span>
+          </div>
+          <div class="history-item-summary">讨论了 Q4 产品路线图，客户对定价模型提出质疑，老板要求补充 ROI 测算数据。</div>
+          <div class="history-item-tags">
+            <span>参与者 <span class="tag">客户</span><span class="tag">老板</span></span>
+            <span>模型 <span style="color:var(--text-secondary);">claude-sonnet-4</span></span>
+          </div>
+        </div>
+
+        <div class="card card-hover history-item">
+          <div class="history-item-row1">
+            <span class="history-item-title">销售话术演练</span>
+            <span class="history-item-time">09-07 10:15</span>
+            <span class="history-item-time">时长 8 分 15 秒</span>
+            <span class="tag tag-success">已结束</span>
+          </div>
+          <div class="history-item-summary">模拟难缠客户场景，练习应对价格异议和竞品对比。客户角色多次打断质疑。</div>
+          <div class="history-item-tags">
+            <span>参与者 <span class="tag">客户</span></span>
+            <span>模型 <span style="color:var(--text-secondary);">claude-sonnet-4</span></span>
+          </div>
+        </div>
+
+        <div class="card card-hover history-item">
+          <div class="history-item-row1">
+            <span class="history-item-title">汇报彩排 — 季度复盘</span>
+            <span class="history-item-time">09-05 16:45</span>
+            <span class="history-item-time">时长 15 分 02 秒</span>
+            <span class="tag tag-accent">会后交流中</span>
+          </div>
+          <div class="history-item-summary">老板角色对数据口径提出三个问题，建议补充同比环比对比和异常归因。</div>
+          <div class="history-item-tags">
+            <span>参与者 <span class="tag">老板</span></span>
+            <span>模型 <span style="color:var(--text-secondary);">claude-opus-4</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 底部提示 -->
+  <div class="bottom-hint">点击左栏红色按钮开始会议 — 转写、AI 角色、语音打断将实时呈现</div>
+</div>
+
+<!-- 原型说明 -->
+<div class="prototype-note">
+  <strong>风格原型</strong> — 基于参考图提取的温暖深棕主题。<br>
+  配色：#181612 背景 / #c9a85c 琥珀强调 / #7aab7a 柔和绿<br>
+  点击顶部标签切换：会议面板 / 设置页 / 历史页
+</div>
+
+<script>
+function showView(name) {
+  document.querySelectorAll('.view-tabs button').forEach((b, i) => {
+    b.classList.toggle('active', ['live','settings','history'][i] === name);
+  });
+  ['live','settings','history'].forEach(v => {
+    document.getElementById('view-' + v).style.display = v === name ? 'flex' : 'none';
+  });
+}
+</script>
+</body>
+</html>
